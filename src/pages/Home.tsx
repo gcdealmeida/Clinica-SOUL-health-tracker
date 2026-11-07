@@ -58,6 +58,8 @@ export default function HomePage() {
   const [onceOpen, setOnceOpen] = useState(false)
   const [takeOpen, setTakeOpen] = useState(false)
   const [allOpen, setAllOpen] = useState(false)
+  // Célula da grade clicada: abre "Tomei medicação" com medicação e dia pré-fixados.
+  const [takePreset, setTakePreset] = useState<{ medId: string; date: string } | null>(null)
 
   // Preferência de métricas (cards customizáveis)
   const [visibleCards, setVisibleCards] = useState<string[]>([])
@@ -412,7 +414,15 @@ export default function HomePage() {
                           </p>
                         </div>
                         {med.weekDoses.map((doses, i) => (
-                          <MedCell key={i} doses={doses} planned={med.weekPlanned?.[i] ?? 0} />
+                          <MedCell
+                            key={i}
+                            doses={doses}
+                            planned={med.weekPlanned?.[i] ?? 0}
+                            onClick={() => {
+                              setTakePreset({ medId: med.id, date: weekDays[i].date })
+                              setTakeOpen(true)
+                            }}
+                          />
                         ))}
                       </div>
                     ))}
@@ -422,7 +432,10 @@ export default function HomePage() {
                       size="sm"
                       variant="outline"
                       className="text-xs flex-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                      onClick={() => setTakeOpen(true)}
+                      onClick={() => {
+                        setTakePreset(null)
+                        setTakeOpen(true)
+                      }}
                     >
                       <Pill className="h-3.5 w-3.5 mr-1" />
                       Tomei medicação
@@ -565,7 +578,16 @@ export default function HomePage() {
         </Card>
 
         <OccasionalIntakeDialog open={onceOpen} onOpenChange={setOnceOpen} onSaved={loadAll} />
-        <TakeIntakeDialog open={takeOpen} onOpenChange={setTakeOpen} onSaved={loadAll} />
+        <TakeIntakeDialog
+          open={takeOpen}
+          onOpenChange={(o) => {
+            setTakeOpen(o)
+            if (!o) setTakePreset(null)
+          }}
+          onSaved={loadAll}
+          presetMedicationId={takePreset?.medId}
+          presetDate={takePreset?.date}
+        />
         <AllIntakesDialog open={allOpen} onOpenChange={setAllOpen} />
       </main>
     </div>
@@ -580,20 +602,39 @@ export default function HomePage() {
  * - vermelho = toma planejada (rotina diária/semanal) ainda não registrada
  * - neutro = nenhum plano nem registro para o dia
  */
-function MedCell({ doses, planned }: { doses: number; planned: number }) {
+function MedCell({
+  doses,
+  planned,
+  onClick,
+}: {
+  doses: number
+  planned: number
+  onClick: () => void
+}) {
   const taken = doses > 0
   const isPlanned = planned > 0
-  if (!taken && !isPlanned) return <span className="justify-self-center" />
+  if (!taken && !isPlanned)
+    return (
+      <button
+        type="button"
+        aria-label="Registrar toma desta medicação neste dia"
+        onClick={onClick}
+        className="justify-self-center h-5 w-5 rounded-full cursor-pointer hover:bg-muted transition-colors"
+      />
+    )
 
   const cls = taken
     ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
     : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 font-semibold'
   return (
-    <span
-      className={`justify-self-center text-[10px] min-w-5 h-5 px-0.5 flex items-center justify-center rounded-full ${cls}`}
+    <button
+      type="button"
+      aria-label={`Registrar toma — ${taken ? doses : planned}x`}
+      onClick={onClick}
+      className={`justify-self-center text-[10px] min-w-5 h-5 px-0.5 flex items-center justify-center rounded-full cursor-pointer hover:opacity-80 hover:scale-110 transition-all ${cls}`}
     >
       {`${taken ? doses : planned}x`}
-    </span>
+    </button>
   )
 }
 

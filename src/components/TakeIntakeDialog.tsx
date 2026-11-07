@@ -13,12 +13,16 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Check, Clock, Loader2, Pill } from 'lucide-react'
+import { CalendarDays, Check, Clock, Loader2, Pill } from 'lucide-react'
 
 interface TakeIntakeDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
+  /** Quando informado, o diálogo já abre com essa medicação selecionada. */
+  presetMedicationId?: string
+  /** Quando informado, a data da toma vem fixa (dia da coluna clicada na grade). */
+  presetDate?: string
 }
 
 const nowTime = () =>
@@ -37,7 +41,13 @@ const todayDate = () => {
  * "pontual"), caindo no mesmo pareamento por nome da grade semanal (célula
  * fica verde) e da linha do tempo do dia.
  */
-export function TakeIntakeDialog({ open, onOpenChange, onSaved }: TakeIntakeDialogProps) {
+export function TakeIntakeDialog({
+  open,
+  onOpenChange,
+  onSaved,
+  presetMedicationId,
+  presetDate,
+}: TakeIntakeDialogProps) {
   const [meds, setMeds] = useState<Medication[]>([])
   const [selected, setSelected] = useState<Medication | null>(null)
   const [loading, setLoading] = useState(false)
@@ -45,22 +55,33 @@ export function TakeIntakeDialog({ open, onOpenChange, onSaved }: TakeIntakeDial
   const [date, setDate] = useState(todayDate)
   const [time, setTime] = useState(nowTime)
 
+  // Abertura pela célula da grade: data vem fixa da coluna clicada.
+  const lockDate = !!presetMedicationId && !!presetDate
+
   useEffect(() => {
     if (!open) return
     setSelected(null)
     setMeds([])
-    setDate(todayDate())
     setTime(nowTime())
+    setDate(presetDate && /^\d{4}-\d{2}-\d{2}$/.test(presetDate) ? presetDate : todayDate())
     setLoading(true)
     medicationService
       .list()
-      .then((all) => setMeds(all.filter((m) => m.routine !== 'once')))
+      .then((all) => {
+        const recurrent = all.filter((m) => m.routine !== 'once')
+        setMeds(recurrent)
+        // Abertura pela célula da grade: medicação já pré-selecionada.
+        if (presetMedicationId) {
+          const preset = recurrent.find((m) => m.id === presetMedicationId)
+          if (preset) setSelected(preset)
+        }
+      })
       .catch((err) => {
         console.error(err)
         toast.error('Não foi possível carregar suas medicações')
       })
       .finally(() => setLoading(false))
-  }, [open])
+  }, [open, presetMedicationId, presetDate])
 
   const handleConfirm = async () => {
     if (!selected || saving) return
@@ -155,20 +176,37 @@ export function TakeIntakeDialog({ open, onOpenChange, onSaved }: TakeIntakeDial
                 <Clock className="h-3.5 w-3.5 text-emerald-600" />
                 Quando você tomou {selected.name}?
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="take-intake-date" className="text-[11px] text-muted-foreground">
-                    Data
-                  </Label>
-                  <Input
-                    id="take-intake-date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="text-sm"
-                  />
+              {lockDate ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5 inline mr-1 -mt-0.5 text-emerald-600" />
+                    Dia da coluna clicada:{' '}
+                    <b className="text-foreground">
+                      {new Date(`${date}T00:00:00`).toLocaleDateString('pt-BR', {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: '2-digit',
+                      })}
+                    </b>
+                  </span>
                 </div>
-                <div className="w-32 space-y-1">
+              ) : null}
+              <div className={lockDate ? 'space-y-1' : 'flex gap-2'}>
+                {!lockDate && (
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="take-intake-date" className="text-[11px] text-muted-foreground">
+                      Data
+                    </Label>
+                    <Input
+                      id="take-intake-date"
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                )}
+                <div className={lockDate ? 'space-y-1' : 'w-32 space-y-1'}>
                   <Label htmlFor="take-intake-time" className="text-[11px] text-muted-foreground">
                     Horário
                   </Label>
