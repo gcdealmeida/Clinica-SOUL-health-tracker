@@ -317,10 +317,13 @@ routerAdd(
       '}'
 
     try {
-      // Tenta em cascata: o alias "fast" é o padrão; se ele não receber a imagem
-      // (gateway não entregou a parte multimodal) ou não conseguir usar a resposta,
-      // tentamos o alias "reasoning" antes de falhar para o usuário.
-      const modelsToTry = photoDataUrl ? ['fast', 'reasoning'] : ['fast']
+      // Tenta em cascata. Com FOTO, começa pelo alias "reasoning": os logs do
+      // gateway mostram que o modelo atrás do alias "fast" (gpt-oss-120b) não
+      // recebe a parte multimodal (responde sempre {"error":"NO_IMAGE_RECEIVED"}),
+      // então iniciar por ele só gasta uma tentativa perdida. Sem foto, só texto,
+      // o "fast" basta. O sentinel NO_IMAGE_RECEIVED continua como rede de
+      // segurança caso os aliases mudem no gateway.
+      const modelsToTry = photoDataUrl ? ['reasoning', 'fast'] : ['fast']
       let parsed = null
       let raw = ''
       let modelUsed = ''
@@ -362,7 +365,20 @@ routerAdd(
             continue
           }
 
-          if (isUsableMeal(parsed)) break
+          if (isUsableMeal(parsed)) {
+            if (imageNeverArrived) {
+              // Um modelo anterior da cascata não recebeu a imagem, mas ESTE
+              // recebeu e respondeu com uma análise utilizável — a entrega
+              // funcionou. Limpa o flag para não descartar o sucesso.
+              console.log(
+                'analyze-meal: o modelo ' +
+                  modelUsed +
+                  ' recebeu a imagem e respondeu com sucesso (modelo anterior não a recebeu).',
+              )
+              imageNeverArrived = false
+            }
+            break
+          }
         } catch (err) {
           console.log('analyze-meal: erro no $ai.chat (model=' + model + '): ' + err.message)
         }
@@ -372,16 +388,17 @@ routerAdd(
       // NUNCA ecoamos alegações de "foto sem nitidez" — a imagem é validada e
       // comprimida pelo app antes de chegar aqui; se o modelo alega baixa
       // nitidez, tratamos como falha de reconhecimento, não como culpa da foto.
-      if (parsed && parsed.error) {
-        const aiError = String(parsed.error)
-        console.log('analyze-meal: a IA recusou a foto: ' + aiError)
-        if (aiError.indexOf('NO_IMAGE_RECEIVED') === -1) {
-          return e.badRequestError(
-            'A IA não conseguiu identificar os alimentos desta foto. Tente refazê-la com boa ' +
-              'iluminação, prato centralizado e todos os alimentos visíveis — ou descreva a ' +
-              'refeição no campo de descrição.',
-          )
-        }
+      // O sentinel NO_IMAGE_RECEIVED NÃO cai aqui: é tratado pelo flag
+      // imageNeverArrived abaixo — que só vira erro se NENHUM modelo da cascata
+      // recebeu a imagem (parsed !== null aqui significa que o ÚLTIMO modelo
+      // respondeu com erro utilizável de outro tipo, e a imagem chegou nele).
+      if (parsed && parsed.error && String(parsed.error).indexOf('NO_IMAGE_RECEIVED') === -1) {
+        console.log('analyze-meal: a IA recusou a foto: ' + String(parsed.error))
+        return e.badRequestError(
+          'A IA não conseguiu identificar os alimentos desta foto. Tente refazê-la com boa ' +
+            'iluminação, prato centralizado e todos os alimentos visíveis — ou descreva a ' +
+            'refeição no campo de descrição.',
+        )
       }
 
       if (imageNeverArrived) {
