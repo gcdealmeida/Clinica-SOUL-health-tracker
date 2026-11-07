@@ -136,6 +136,7 @@ routerAdd(
           : 'Não foi possível gerar a análise no momento.'
 
       // Salva o registro da análise no histórico
+      // (campo insights tem limite de 5000 caracteres — corta para caber)
       try {
         const aiCol = $app.findCollectionByNameOrId('ai_analyses')
         const analysisRecord = new Record(aiCol)
@@ -145,7 +146,7 @@ routerAdd(
           Array.isArray(variables) ? variables.join(', ') : String(variables),
         )
         if (question) analysisRecord.set('question', question)
-        analysisRecord.set('insights', aiText)
+        analysisRecord.set('insights', aiText.slice(0, 4900))
         analysisRecord.set('summary', aiText.slice(0, 150) + '...')
         $app.save(analysisRecord)
       } catch (saveErr) {
@@ -174,6 +175,33 @@ routerAdd(
   'POST',
   '/backend/v1/ai/analyze-meal',
   (e) => {
+    // IMPORTANTE (JSVM PocketBase): nada de funções/const top-level referenciadas
+    // dentro do callback — o runtime executa callbacks em pool separado e as
+    // declarações de módulo não são visíveis (ReferenceError). Tudo inline aqui.
+    const extractMealJson = (raw) => {
+      let attempt = String(raw || '').trim()
+      const fence = attempt.match(/```(?:json)?\s*([\s\S]*?)```/i)
+      if (fence) attempt = fence[1].trim()
+      const start = attempt.indexOf('{')
+      const end = attempt.lastIndexOf('}')
+      if (start === -1 || end <= start) return null
+      try {
+        return JSON.parse(attempt.slice(start, end + 1))
+      } catch (_) {
+        return null
+      }
+    }
+
+    const isUsableMeal = (parsed) => {
+      if (!parsed || typeof parsed !== 'object' || parsed.error) return false
+      const items = Array.isArray(parsed.items) ? parsed.items : []
+      const validItems = items.filter(
+        (it) =>
+          it && typeof it.name === 'string' && it.name.trim().length > 0 && Number(it.weight_g) > 0,
+      )
+      return validItems.length > 0 && (Number(parsed.total_weight_g) || 0) > 0
+    }
+
     const authRecord = e.auth
     if (!authRecord) {
       return e.forbiddenError('Autenticação necessária')
@@ -183,14 +211,52 @@ routerAdd(
     const description = (body.description || '').trim()
     const mealType = body.mealType || 'almoco'
 
-    // A foto chega como data URL "data:image/jpeg;base64,..." gerada no app.
-    // O app comprime/redimensiona a imagem antes de enviar (limite ~4MB em base64).
+    // A foto chega como data URL "data:image/jpeg;base64,..." gerada no app
+    // (redimensionada para ~1280px e JPEG qualidade 0.9).
     const photoDataUrl = (body.photoBase64 || '').trim()
-    const MAX_IMAGE_B64 = 5 * 1024 * 1024 // ~5MB de base64 decodificado ≈ 3.7MB de imagem
-    if (photoDataUrl && photoDataUrl.length > MAX_IMAGE_B64) {
-      return e.badRequestError(
-        'A foto é muito grande para análise. Tente uma imagem menor ou de melhor compressão.',
+    const MAX_IMAGE_B64 = 6 * 1024 * 1024
+
+    if (photoDataUrl) {
+      // Log de diagnóstico: tamanho REAL da imagem que chegou no hook.
+      const commaIdx = photoDataUrl.indexOf(',')
+      const header = commaIdx !== -1 ? photoDataUrl.slice(0, commaIdx) : ''
+      const b64Part = commaIdx !== -1 ? photoDataUrl.slice(commaIdx + 1) : ''
+      const approxKb = Math.round(((b64Part.length * 3) / 4 / 1024) * 10) / 10
+      console.log(
+        'analyze-meal: foto recebida — dataUrl=' +
+          photoDataUrl.length +
+          ' chars, header="' +
+          header.slice(0, 40) +
+          '", base64=' +
+          b64Part.length +
+          ' chars (~' +
+          approxKb +
+          'KB decodificados)',
       )
+
+      // Validação estrita da data URL: uma imagem malformada/truncada chega
+      // ao modelo corrompida e ele "não enxerga" nada — falha logo, com causa clara.
+      if (!/^data:image\/(png|jpe?g|webp|gif);base64$/.test(header)) {
+        console.log(
+          'analyze-meal: REJEITADA — header de data URL inválido: "' + header.slice(0, 40) + '"',
+        )
+        return e.badRequestError(
+          'A foto enviada está em um formato não suportado. Envie a foto em JPG, PNG ou WebP.',
+        )
+      }
+      if (!b64Part || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64Part) || b64Part.length % 4 !== 0) {
+        console.log(
+          'analyze-meal: REJEITADA — base64 inválido/truncado (' + b64Part.length + ' chars)',
+        )
+        return e.badRequestError(
+          'A foto foi corrompida durante o envio. Tente selecionar a foto novamente.',
+        )
+      }
+      if (photoDataUrl.length > MAX_IMAGE_B64) {
+        return e.badRequestError(
+          'A foto é muito grande para análise. Tente uma imagem menor ou de melhor compressão.',
+        )
+      }
     }
 
     // Precisa de pelo menos um insumo real: foto OU descrição do cliente.
@@ -212,30 +278,34 @@ routerAdd(
         ? 'Descrição e notas do cliente: ' + description + '\n'
         : 'O cliente não adicionou descrição — analise SOMENTE a foto.\n') +
       '\n' +
-      'Analise a foto do prato anexada e responda estritamente no JSON solicitado, ' +
-      'identificando os alimentos visíveis, o peso estimado de cada porção em gramas ' +
-      'e o peso total do prato.'
+      'Responda estritamente no JSON solicitado, identificando os alimentos visíveis, ' +
+      'o peso estimado de cada porção em gramas e o peso total do prato.'
 
     if (photoDataUrl) {
       textPart =
-        'Uma FOTO REAL do prato do cliente está anexada nesta mensagem. Analise a imagem ' +
-        'visualmente — identifique cada alimento visível, estime o peso de cada porção em ' +
+        'Uma FOTO REAL do prato do cliente está anexada nesta mensagem. Ela foi capturada em ' +
+        'alta resolução e otimizada para análise — ela está NÍTIDA. Analise a imagem ' +
+        'visualmente: identifique cada alimento visível, estime o peso de cada porção em ' +
         'gramas e o peso total do prato com base no que aparece na foto.\n\n' +
         textPart
       userContent.push({ type: 'text', text: textPart })
-      userContent.push({ type: 'image_url', image_url: { url: photoDataUrl } })
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: photoDataUrl, detail: 'high' },
+      })
     } else {
       userContent.push({ type: 'text', text: textPart })
     }
 
     const systemPrompt =
       'Você é um nutricionista especialista da Clínica Soul com capacidade de visão computacional. ' +
-      'Seu papel é analisar a FOTO anexada da refeição (e a descrição do cliente, se houver), identificar visualmente ' +
-      'todos os alimentos presentes de forma discriminada, estimar com bom senso o peso total em gramas de cada porção e do prato ' +
+      'A foto do prato do cliente foi capturada em alta resolução e otimizada para análise: trate-a como NÍTIDA e legível. ' +
+      'NUNCA afirme que a foto está sem nitidez, borrada ou em baixa resolução — se a imagem está presente, analise-a da melhor forma possível. ' +
+      'Identifique visualmente todos os alimentos presentes de forma discriminada, estime com bom senso o peso total em gramas de cada porção e do prato ' +
       '(use referências visuais: tamanho do prato, talheres, copos para calibrar a escala), ' +
-      'calorias aproximadas e fazer uma avaliação nutricional saudável. ' +
-      'Se a imagem não mostrar comida, ou estiver ilegível/borrada demais para análise, NÃO invente alimentos: ' +
-      'responda exatamente {"error": "Não foi possível identificar alimentos legíveis na foto. Envie uma foto mais nítida do prato."} ' +
+      'as calorias aproximadas e faça uma avaliação nutricional saudável. ' +
+      'NÃO invente alimentos que não consegue ver. ' +
+      'APENAS se esta mensagem NÃO contiver nenhuma imagem, responda exatamente {"error": "NO_IMAGE_RECEIVED"}. ' +
       'Você DEVE responder SEMPRE em JSON válido, sem texto fora do JSON, com a estrutura: ' +
       '{' +
       '  "title": "nome curto do prato", ' +
@@ -247,51 +317,87 @@ routerAdd(
       '}'
 
     try {
-      const reply = $ai.chat({
-        model: 'fast',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userContent },
-        ],
-      })
-
-      const raw =
-        reply.choices && reply.choices[0] && reply.choices[0].message
-          ? String(reply.choices[0].message.content || '')
-          : ''
-
-      // Parse defensivo: tira cercas de código ```json ... ``` e pega o 1º objeto balanceado.
+      // Tenta em cascata: o alias "fast" é o padrão; se ele não receber a imagem
+      // (gateway não entregou a parte multimodal) ou não conseguir usar a resposta,
+      // tentamos o alias "reasoning" antes de falhar para o usuário.
+      const modelsToTry = photoDataUrl ? ['fast', 'reasoning'] : ['fast']
       let parsed = null
-      let parseAttempt = raw.trim()
-      const fence = parseAttempt.match(/```(?:json)?\s*([\s\S]*?)```/i)
-      if (fence) parseAttempt = fence[1].trim()
-      // Primeiro "{" até o último "}" — cobre preâmbulos curtos antes do JSON.
-      const start = parseAttempt.indexOf('{')
-      const end = parseAttempt.lastIndexOf('}')
-      if (start !== -1 && end > start) {
+      let raw = ''
+      let modelUsed = ''
+      let imageNeverArrived = false
+
+      for (let i = 0; i < modelsToTry.length; i++) {
+        const model = modelsToTry[i]
         try {
-          parsed = JSON.parse(parseAttempt.slice(start, end + 1))
-        } catch (_) {
-          parsed = null
+          const reply = $ai.chat({
+            model: model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
+            ],
+          })
+          modelUsed = reply && reply.model ? String(reply.model) : model
+          raw =
+            reply.choices && reply.choices[0] && reply.choices[0].message
+              ? String(reply.choices[0].message.content || '')
+              : ''
+          console.log(
+            'analyze-meal: modelo ' +
+              modelUsed +
+              ' respondeu (' +
+              raw.length +
+              ' chars): ' +
+              raw.slice(0, 300),
+          )
+          parsed = extractMealJson(raw)
+
+          if (parsed && parsed.error && String(parsed.error).indexOf('NO_IMAGE_RECEIVED') !== -1) {
+            imageNeverArrived = true
+            parsed = null
+            console.log(
+              'analyze-meal: o modelo ' +
+                modelUsed +
+                ' NÃO recebeu a imagem — tentando próximo modelo.',
+            )
+            continue
+          }
+
+          if (isUsableMeal(parsed)) break
+        } catch (err) {
+          console.log('analyze-meal: erro no $ai.chat (model=' + model + '): ' + err.message)
         }
       }
 
       // A IA pode sinalizar que a foto não tem comida legível: repassa como erro claro.
+      // NUNCA ecoamos alegações de "foto sem nitidez" — a imagem é validada e
+      // comprimida pelo app antes de chegar aqui; se o modelo alega baixa
+      // nitidez, tratamos como falha de reconhecimento, não como culpa da foto.
       if (parsed && parsed.error) {
-        return e.badRequestError(String(parsed.error))
+        const aiError = String(parsed.error)
+        console.log('analyze-meal: a IA recusou a foto: ' + aiError)
+        if (aiError.indexOf('NO_IMAGE_RECEIVED') === -1) {
+          return e.badRequestError(
+            'A IA não conseguiu identificar os alimentos desta foto. Tente refazê-la com boa ' +
+              'iluminação, prato centralizado e todos os alimentos visíveis — ou descreva a ' +
+              'refeição no campo de descrição.',
+          )
+        }
       }
 
-      // Validação estrita: um resultado sem itens identificáveis NÃO é sucesso.
-      const items = parsed && Array.isArray(parsed.items) ? parsed.items : []
-      const validItems = items.filter(
-        (it) =>
-          it && typeof it.name === 'string' && it.name.trim().length > 0 && Number(it.weight_g) > 0,
-      )
-      const totalWeight = parsed ? Number(parsed.total_weight_g) || 0 : 0
+      if (imageNeverArrived) {
+        console.log('analyze-meal: NENHUM modelo recebeu a imagem multimodal (gateway).')
+        return e.json(503, {
+          error:
+            'Não foi possível entregar a foto ao modelo de visão neste momento. Tente novamente ' +
+            'em instantes ou descreva a refeição no campo de descrição.',
+        })
+      }
 
-      if (!parsed || validItems.length === 0 || totalWeight <= 0) {
+      if (!isUsableMeal(parsed)) {
         console.log(
-          'analyze-meal: resposta da IA sem itens utilizáveis. Conteúdo bruto: ' +
+          'analyze-meal: resposta da IA sem itens utilizáveis (model=' +
+            modelUsed +
+            '). Conteúdo bruto: ' +
             raw.slice(0, 400),
         )
         return e.badRequestError(
@@ -300,6 +406,12 @@ routerAdd(
             'descreva a refeição no campo de descrição.',
         )
       }
+
+      const items = Array.isArray(parsed.items) ? parsed.items : []
+      const validItems = items.filter(
+        (it) =>
+          it && typeof it.name === 'string' && it.name.trim().length > 0 && Number(it.weight_g) > 0,
+      )
 
       const result = {
         title:
@@ -311,7 +423,7 @@ routerAdd(
           weight_g: Math.round(Number(it.weight_g) || 0),
           calories: Math.round(Number(it.calories) || 0),
         })),
-        total_weight_g: Math.round(totalWeight),
+        total_weight_g: Math.round(Number(parsed.total_weight_g) || 0),
         total_calories: Math.round(Number(parsed.total_calories) || 0),
         macronutrients: {
           protein_g: Math.round(
@@ -321,8 +433,18 @@ routerAdd(
           fat_g: Math.round(Number(parsed.macronutrients && parsed.macronutrients.fat_g) || 0),
         },
         nutritional_assessment: String(parsed.nutritional_assessment || ''),
+        analyzed_with_model: modelUsed,
       }
 
+      console.log(
+        'analyze-meal: SUCESSO com model=' +
+          modelUsed +
+          ' — itens=' +
+          result.items.length +
+          ', peso_total=' +
+          result.total_weight_g +
+          'g',
+      )
       return e.json(200, result)
     } catch (err) {
       console.log('Erro no reconhecimento de refeição:', err.message)

@@ -78,12 +78,18 @@ export default function MealsPage() {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       setPhotoFile(file)
-      setPhotoPreview(URL.createObjectURL(file))
+      // Usa a mesma rotina de compressão do envio à IA para o preview:
+      // o usuário vê EXATAMENTE o que a IA receberá (orientação EXIF correta).
+      compressPhoto(file)
+        .then(setPhotoPreview)
+        .catch(() => setPhotoPreview(URL.createObjectURL(file)))
     }
   }
 
-  // Redimensiona/comprime a foto para JPEG (~1024px) e devolve data URL base64
-  // pronta para ser enviada à IA — blob: e URLs gigantes nunca vão ao backend.
+  // Redimensiona/comprime a foto para JPEG (~1280px, qualidade 0.9) e devolve
+  // data URL base64 pronta para ser enviada à IA — blob: e URLs gigantes nunca
+  // vão ao backend. A qualidade 0.9 preserva nitidez suficiente para a IA ler
+  // texturas dos alimentos sem estourar o payload.
   const compressPhoto = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -92,18 +98,23 @@ export default function MealsPage() {
         const img = new Image()
         img.onerror = () => reject(new Error('Formato de imagem não suportado'))
         img.onload = () => {
-          const maxSide = 1024
+          const maxSide = 1280
           const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
           const canvas = document.createElement('canvas')
-          canvas.width = Math.round(img.width * scale)
-          canvas.height = Math.round(img.height * scale)
+          canvas.width = Math.max(1, Math.round(img.width * scale))
+          canvas.height = Math.max(1, Math.round(img.height * scale))
           const ctx = canvas.getContext('2d')
           if (!ctx) {
             reject(new Error('Não foi possível processar a foto'))
             return
           }
+          // Fundo branco evita halo preto em PNGs com transparência no JPEG.
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+          ctx.imageSmoothingEnabled = true
+          ctx.imageSmoothingQuality = 'high'
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-          resolve(canvas.toDataURL('image/jpeg', 0.85))
+          resolve(canvas.toDataURL('image/jpeg', 0.9))
         }
         img.src = reader.result as string
       }
@@ -140,11 +151,19 @@ export default function MealsPage() {
       toast.success('Prato reconhecido pela Inteligência Artificial!')
     } catch (err: any) {
       console.error(err)
-      const msg =
+      const raw =
         err?.response?.error ||
         err?.response?.message ||
         err?.message ||
         'Não foi possível analisar a foto do prato. Tente novamente.'
+      // O hook devolve 400 com mensagem clara quando a IA realmente não
+      // consegue identificar alimentos — exibimos a causa real, sem fabricar
+      // resultado. Se a falha foi na entrega da imagem (503), o toast já
+      // mostra o pedido de retry descrito pelo backend.
+      const msg =
+        typeof raw === 'string'
+          ? raw
+          : 'Não foi possível analisar a foto do prato. Tente novamente.'
       toast.error(msg)
     } finally {
       setAnalyzingAi(false)
