@@ -421,14 +421,6 @@ export default function HomePage() {
                       <Pill className="h-3.5 w-3.5 mr-1" />
                       Tomei medicação
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-xs text-emerald-600"
-                      onClick={() => navigate('/medicamentos')}
-                    >
-                      Horários
-                    </Button>
                   </div>
                 </>
               )}

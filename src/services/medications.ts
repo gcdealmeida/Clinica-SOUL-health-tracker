@@ -80,13 +80,13 @@ export const medicationService = {
   },
 
   /**
-   * Registra a toma de HOJE de uma medicação recorrente (routine daily/weekly):
-   * grava health_metrics category 'remedio' com text_value = nome da medicação
-   * (sem notes "pontual" — assim conta como toma de rotina no pareamento por
-   * nome da grade, virando célula verde) e volta para a linha do tempo do dia.
-   * Sem digitação: só o id + horário (padrão = agora).
+   * Registra a toma de uma medicação recorrente (routine daily/weekly) na
+   * DATA e HORÁRIO informados (padrão = agora): grava health_metrics category
+   * 'remedio' com text_value = nome da medicação (sem notes "pontual" — assim
+   * conta como toma de rotina no pareamento por nome da grade, virando célula
+   * verde) e volta para a linha do tempo do dia.
    */
-  async registerIntake(medicationId: string, time?: string): Promise<Medication> {
+  async registerIntake(medicationId: string, date?: string, time?: string): Promise<Medication> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
 
@@ -101,7 +101,9 @@ export const medicationService = {
       throw new Error('Horário inválido. Use o formato HH:MM')
     }
     const now = new Date()
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const dateStr =
+      date?.trim() ||
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const hh =
       hhmm ||
       `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`

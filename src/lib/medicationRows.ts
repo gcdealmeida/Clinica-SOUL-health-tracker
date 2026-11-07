@@ -15,7 +15,7 @@ import type { Medication } from '@/services/medications'
 const weekdayOf = (date: string): number | null => {
   const day = (date || '').slice(0, 10)
   if (!day) return null
-  const d = new Date(day.replace(' ', 'T') + ':00')
+  const d = new Date(`${day}T00:00:00`)
   return isNaN(d.getTime()) ? null : d.getDay()
 }
 
