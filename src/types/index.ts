@@ -25,6 +25,7 @@ export type HealthCategory =
   | 'alcool'
   | 'sauna'
   | 'meditacao'
+  | 'sintoma'
   | 'outro'
 
 export interface HealthMetric {

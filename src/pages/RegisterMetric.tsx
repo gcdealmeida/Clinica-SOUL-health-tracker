@@ -26,6 +26,7 @@ import {
   Clock,
   Upload,
   CheckCircle2,
+  ClipboardList,
 } from 'lucide-react'
 
 export const CATEGORY_DEFINITIONS: Array<{
@@ -162,6 +163,15 @@ export const CATEGORY_DEFINITIONS: Array<{
     color: 'text-emerald-700',
     isNumericOnly: true,
   },
+  {
+    id: 'sintoma',
+    name: 'Sintoma',
+    icon: ClipboardList,
+    defaultUnit: '/10',
+    placeholder: 'Ex: Ansiedade, Taquicardia, Tremor',
+    color: 'text-amber-600',
+    isNumericOnly: false,
+  },
 ]
 
 export default function RegisterMetricPage() {
@@ -178,6 +188,7 @@ export default function RegisterMetricPage() {
   })
   const [numericValue, setNumericValue] = useState<string>('')
   const [textValue, setTextValue] = useState<string>('')
+  const [severity, setSeverity] = useState<string>('5')
   const [notes, setNotes] = useState<string>('')
   const [fileAttachment, setFileAttachment] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -221,7 +232,12 @@ export default function RegisterMetricPage() {
       await healthService.createMetric({
         category: selectedCategory,
         date_time: dateTime,
-        numeric_value: numericValue ? parseFloat(numericValue.replace(',', '.')) : undefined,
+        numeric_value:
+          selectedCategory === 'sintoma'
+            ? parseFloat(severity)
+            : numericValue
+              ? parseFloat(numericValue.replace(',', '.'))
+              : undefined,
         text_value: textValue || undefined,
         unit: currentDef.defaultUnit,
         notes: notes || undefined,
@@ -231,6 +247,7 @@ export default function RegisterMetricPage() {
       toast.success(`${currentDef.name} registrado com sucesso!`)
       setNumericValue('')
       setTextValue('')
+      setSeverity('5')
       setNotes('')
       setFileAttachment(null)
       await loadHistory(selectedCategory)
@@ -340,7 +357,36 @@ export default function RegisterMetricPage() {
                     )}
                   </div>
 
-                  {currentDef.id === 'pressao' ? (
+                  {currentDef.id === 'sintoma' ? (
+                    <div className="space-y-2.5">
+                      <Input
+                        id="metric-value"
+                        placeholder={currentDef.placeholder}
+                        value={textValue}
+                        onChange={(e) => setTextValue(e.target.value)}
+                        className="text-sm"
+                        required
+                      />
+                      <div>
+                        <Label className="text-[11px] text-muted-foreground">
+                          Severidade: <b className="text-foreground">{severity || '—'}/10</b>
+                        </Label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={10}
+                          step={1}
+                          value={severity}
+                          onChange={(e) => setSeverity(e.target.value)}
+                          className="w-full accent-amber-500"
+                        />
+                        <div className="flex justify-between text-[9px] text-muted-foreground">
+                          <span>sem sintoma</span>
+                          <span>intolerável</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : currentDef.id === 'pressao' ? (
                     <div className="grid grid-cols-2 gap-2">
                       <Input
                         placeholder="Ex: 120/80"

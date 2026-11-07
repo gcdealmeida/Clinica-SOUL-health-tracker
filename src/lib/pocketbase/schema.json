@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-07T20:40:34.353Z",
+  "generatedAt": "2026-11-07T21:02:00.019Z",
   "collections": [
     {
       "name": "users",
@@ -94,7 +94,8 @@
             "alcool",
             "sauna",
             "meditacao",
-            "outro"
+            "outro",
+            "sintoma"
           ]
         },
         {
@@ -599,6 +600,47 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_ai_analyses_user ON ai_analyses (user, created DESC)"]
+    },
+    {
+      "name": "user_preferences",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && user = @request.auth.id",
+        "view": "@request.auth.id != '' && user = @request.auth.id",
+        "create": "@request.auth.id != '' && user = @request.auth.id",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "dashboard_metrics",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_user_preferences_user ON user_preferences (user)"]
     }
   ]
 }

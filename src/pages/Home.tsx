@@ -1,33 +1,42 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { healthService } from '@/services/health'
 import { emotionalService } from '@/services/emotional'
 import { mealService } from '@/services/mealsAndAi'
 import { medicalService } from '@/services/medical'
-import { HealthMetric, EmotionalLog, Meal, Diet } from '@/types'
+import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
+import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+
+import { toast } from 'sonner'
 import {
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  X,
+  Pencil,
+  UtensilsCrossed,
+  Smile,
   Droplets,
   Coffee,
-  Moon,
-  Activity,
-  Heart,
-  Scale,
-  Sparkles,
-  UtensilsCrossed,
-  FileText,
-  Plus,
-  Smile,
-  ChevronRight,
-  TrendingUp,
-  Clock,
-  Flame,
-  ShieldAlert,
+  ClipboardList,
+  AlertTriangle,
 } from 'lucide-react'
+import {
+  buildMetricCards,
+  buildTimeline,
+  buildMedRows,
+  buildSymptomRows,
+  weekEmotionalSummary,
+  lastWeekDays,
+  METRIC_CARDS,
+  MetricCardData,
+  TimelineEntry,
+} from '@/lib/dashboard'
 
 export default function HomePage() {
   const { user } = useAuth()
@@ -35,489 +44,575 @@ export default function HomePage() {
 
   const [metrics, setMetrics] = useState<HealthMetric[]>([])
   const [emotionalLogs, setEmotionalLogs] = useState<EmotionalLog[]>([])
-  const [recentMeals, setRecentMeals] = useState<Meal[]>([])
-  const [activeDiets, setActiveDiets] = useState<Diet[]>([])
+  const [meals, setMeals] = useState<Meal[]>([])
+  const [medRecords, setMedRecords] = useState<MedicalRecord[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Preferência de métricas (cards customizáveis)
+  const [visibleCards, setVisibleCards] = useState<string[]>([])
+  const [editingCards, setEditingCards] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+
+  // Alternador de janela dos sintomas (7/28/90 dias)
+  const [symptomWindow, setSymptomWindow] = useState<7 | 28 | 90>(7)
 
   useEffect(() => {
     if (!user) return
-    loadDashboardData()
+    loadAll()
   }, [user])
 
-  const loadDashboardData = async () => {
+  const loadAll = async () => {
     try {
       setLoading(true)
-      const [mList, eList, mealList, dietList] = await Promise.all([
-        healthService.listUserMetrics(undefined, 30),
-        emotionalService.listLogs(undefined, 5),
+      const [metricList, eList, mealList, medList, prefs] = await Promise.all([
+        healthService.listUserMetrics(undefined, 200),
+        emotionalService.listLogs(undefined, 30),
         mealService.listMeals(undefined),
-        medicalService.listDiets(undefined),
+        medicalService.listMedicalRecords(undefined),
+        loadDashboardPreferences(),
       ])
-      setMetrics(mList)
+      setMetrics(metricList)
       setEmotionalLogs(eList)
-      setRecentMeals(mealList.slice(0, 4))
-      setActiveDiets(dietList.filter((d) => d.active))
+      setMeals(mealList)
+      setMedRecords(medList)
+      setVisibleCards(prefs.metrics)
     } catch (err) {
-      console.error('Erro ao carregar dados do dia:', err)
+      console.error('Erro ao carregar dados do painel:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // Resumo de hoje
-  const todayStr = new Date().toISOString().slice(0, 10)
-  const todayMetrics = metrics.filter((m) => m.date_time.startsWith(todayStr))
+  const today = new Date().toISOString().slice(0, 10)
 
-  // Água consumida hoje
-  const todayWater = todayMetrics
-    .filter((m) => m.category === 'agua')
-    .reduce((sum, m) => sum + (m.numeric_value || 0), 0)
+  // ----- Derivações -----
+  const cards = useMemo(() => buildMetricCards(visibleCards, metrics), [visibleCards, metrics])
+  const todayEntries = useMemo(
+    () =>
+      buildTimeline(
+        metrics.filter((m) => (m.date_time || '').slice(0, 10) === today),
+        meals.filter((m) => (m.date_time || '').slice(0, 10) === today),
+        emotionalLogs.filter((l) => (l.date || '').slice(0, 10) === today),
+      ),
+    [metrics, meals, emotionalLogs, today],
+  )
+  const medRows = useMemo(
+    () =>
+      buildMedRows(
+        medRecords.filter((r) => r.type === 'medicamento_continuo'),
+        metrics.filter((m) => m.category === 'remedio'),
+      ),
+    [medRecords, metrics],
+  )
+  const symptomRows = useMemo(
+    () => buildSymptomRows(metrics, symptomWindow),
+    [metrics, symptomWindow],
+  )
+  const weekDays = useMemo(() => lastWeekDays(), [])
+  const emoSummary = useMemo(() => weekEmotionalSummary(emotionalLogs), [emotionalLogs])
+  const todayDiary = emotionalLogs.find((l) => (l.date || '').slice(0, 10) === today)
 
-  // Cafés tomados hoje
-  const todayCoffee = todayMetrics
-    .filter((m) => m.category === 'cafe')
-    .reduce((sum, m) => sum + (m.numeric_value || 0), 0)
+  // ----- Customização dos cards -----
+  const moveCard = (id: string, dir: -1 | 1) => {
+    setVisibleCards((prev) => {
+      const idx = prev.indexOf(id)
+      const next = [...prev]
+      const target = idx + dir
+      if (idx < 0 || target < 0 || target >= next.length) return prev
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+  }
 
-  // Último sono
-  const lastSleep = metrics.find((m) => m.category === 'sono')
-  // Último HRV
-  const lastHrv = metrics.find((m) => m.category === 'hrv')
-  // Última pressão
-  const lastBloodPressure = metrics.find((m) => m.category === 'pressao')
-  // Último peso
-  const lastWeight = metrics.find((m) => m.category === 'peso')
-  // Último Diário Emocional
-  const latestMood = emotionalLogs[0]
+  const removeCard = (id: string) => setVisibleCards((prev) => prev.filter((c) => c !== id))
 
-  const quickAction = (cat: string) => {
-    navigate(`/registrar?category=${cat}`)
+  const addCard = (id: string) =>
+    setVisibleCards((prev) => (prev.includes(id) ? prev : [...prev, id]))
+
+  const persistCards = async (order: string[]) => {
+    setSavingOrder(true)
+    try {
+      await saveDashboardPreferences({ metrics: order })
+      toast.success('Preferências do painel salvas')
+    } catch (err) {
+      console.error(err)
+      toast.error('Não foi possível salvar as preferências')
+    } finally {
+      setSavingOrder(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl space-y-6">
-        {/* Welcome Banner */}
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white p-6 sm:p-8 shadow-md relative overflow-hidden">
-          <div className="relative z-10 max-w-2xl">
-            <span className="text-xs uppercase tracking-wider font-semibold text-emerald-100 bg-emerald-800/40 px-2.5 py-1 rounded-full">
-              Visão do Dia •{' '}
+      <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl space-y-5">
+        {/* Cabeçalho compacto */}
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+              Olá, {user?.name ? user.name.split(' ')[0] : 'Cliente Soul'} 👋
+            </h1>
+            <p className="text-xs text-muted-foreground">
               {new Date().toLocaleDateString('pt-BR', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
               })}
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-bold mt-2">
-              Olá, {user?.name ? user.name.split(' ')[0] : 'Cliente Soul'}!
-            </h1>
-            <p className="text-emerald-50 text-sm sm:text-base mt-1.5 opacity-90">
-              Acompanhe seus sinais vitais, hábitos essenciais e mantenha sua rotina em sintonia com
-              seu bem-estar.
+              {' • '}Painel Hoje
             </p>
-
-            <div className="flex flex-wrap items-center gap-3 mt-4">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => navigate('/registrar')}
-                className="bg-white text-emerald-900 hover:bg-emerald-50 font-medium text-xs sm:text-sm"
-              >
-                <Plus className="h-4 w-4 mr-1 text-emerald-600" />
-                Registrar Hábito / Sinal
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate('/analises')}
-                className="border-white/40 text-white hover:bg-white/20 text-xs sm:text-sm backdrop-blur-sm"
-              >
-                <Sparkles className="h-4 w-4 mr-1 text-teal-200" />
-                Cruzamento Inteligente IA
-              </Button>
-            </div>
           </div>
-
-          <div className="absolute right-4 -bottom-6 opacity-10 pointer-events-none hidden sm:block">
-            <Activity className="h-64 w-64 text-white" />
-          </div>
-        </div>
-
-        {/* Atalhos Rápidos de Lançamento */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span>Lançamento Rápido</span>
-              <Badge variant="secondary" className="text-[10px] font-normal">
-                1 clique
-              </Badge>
-            </h2>
-            <Link
-              to="/registrar"
-              className="text-xs text-emerald-600 hover:underline flex items-center"
-            >
-              Ver todos <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-            <Button
-              variant="outline"
-              onClick={() => quickAction('agua')}
-              className="h-auto py-3 flex-col gap-1.5 border-blue-100 hover:bg-blue-50/60 dark:hover:bg-blue-950/30 dark:border-blue-950"
-            >
-              <Droplets className="h-5 w-5 text-blue-500" />
-              <span className="text-xs font-medium">Água (+250ml)</span>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => navigate('/refeicoes')}>
+              <UtensilsCrossed className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+              Refeição
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => quickAction('cafe')}
-              className="h-auto py-3 flex-col gap-1.5 border-amber-100 hover:bg-amber-50/60 dark:hover:bg-amber-950/30 dark:border-amber-950"
-            >
-              <Coffee className="h-5 w-5 text-amber-700" />
-              <span className="text-xs font-medium">Café (+1 xíc)</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => quickAction('sono')}
-              className="h-auto py-3 flex-col gap-1.5 border-indigo-100 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/30 dark:border-indigo-950"
-            >
-              <Moon className="h-5 w-5 text-indigo-500" />
-              <span className="text-xs font-medium">Sono / Noite</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => quickAction('pressao')}
-              className="h-auto py-3 flex-col gap-1.5 border-rose-100 hover:bg-rose-50/60 dark:hover:bg-rose-950/30 dark:border-rose-950"
-            >
-              <Heart className="h-5 w-5 text-rose-500" />
-              <span className="text-xs font-medium">Pressão Arterial</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/diario-emocional')}
-              className="h-auto py-3 flex-col gap-1.5 border-violet-100 hover:bg-violet-50/60 dark:hover:bg-violet-950/30 dark:border-violet-950"
-            >
-              <Smile className="h-5 w-5 text-violet-500" />
-              <span className="text-xs font-medium">Diário de Humor</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/refeicoes')}
-              className="h-auto py-3 flex-col gap-1.5 border-emerald-100 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/30 dark:border-emerald-950"
-            >
-              <UtensilsCrossed className="h-5 w-5 text-emerald-600" />
-              <span className="text-xs font-medium">Foto Refeição</span>
-            </Button>
-          </div>
-        </section>
-
-        {/* Indicadores Principais de Hoje */}
-        <section className="space-y-3">
-          <h2 className="text-base font-semibold text-foreground">
-            Sinais Vitais e Hábitos Recentes
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Água */}
-            <Card className="border-border/60 hover:shadow-sm transition-shadow">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Água Hoje</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-blue-600">{todayWater}</span>
-                    <span className="text-xs text-muted-foreground">ml</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Meta sugerida: 2.500 ml
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Droplets className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Sono */}
-            <Card className="border-border/60 hover:shadow-sm transition-shadow">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Último Sono</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-indigo-600">
-                      {lastSleep?.numeric_value ? `${lastSleep.numeric_value}h` : '--'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">registrado</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[160px]">
-                    {lastSleep?.notes || 'Dispositivo / Manual'}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Moon className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* HRV */}
-            <Card className="border-border/60 hover:shadow-sm transition-shadow">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">HRV (VFC)</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-emerald-600">
-                      {lastHrv?.numeric_value ? `${lastHrv.numeric_value}` : '--'}
-                    </span>
-                    <span className="text-xs text-muted-foreground">ms</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {lastHrv?.numeric_value && lastHrv.numeric_value >= 50
-                      ? 'Ótima recuperação do SNA'
-                      : 'Equilíbrio autonômico'}
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Activity className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Café & Estímulo */}
-            <Card className="border-border/60 hover:shadow-sm transition-shadow">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">Café Hoje</p>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-bold text-amber-700">{todayCoffee}</span>
-                    <span className="text-xs text-muted-foreground">xícaras</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Evite após 14h para proteger o sono
-                  </p>
-                </div>
-                <div className="h-10 w-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <Coffee className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-
-        {/* Duas colunas: Diário emocional & Dieta ativa */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Diário emocional */}
-          <Card className="border-border/60">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Smile className="h-4 w-4 text-violet-600" />
-                  Estado Emocional Recente
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Acompanhamento de humor, estresse e energia
-                </CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate('/diario-emocional')}
-                className="text-xs text-violet-600"
-              >
-                Fazer Check-in
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {latestMood ? (
-                <div className="bg-violet-50/50 dark:bg-violet-950/20 border border-violet-100 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm text-foreground">
-                      {latestMood.mood_label}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className="bg-white border-violet-200 text-violet-800 text-xs"
-                    >
-                      Nota {latestMood.mood_score} / 5
-                    </Badge>
-                  </div>
-                  {latestMood.affecting_factors && (
-                    <p className="text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">O que mais afetou: </span>
-                      {latestMood.affecting_factors}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 border-t border-violet-100">
-                    <span>⚡ Energia: {latestMood.energy_level || 3}/5</span>
-                    <span>🌊 Estresse: {latestMood.stress_level || 3}/5</span>
-                    <span className="ml-auto text-[11px]">{latestMood.date}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground space-y-2">
-                  <p className="text-sm">Nenhum check-in emocional registrado hoje.</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate('/diario-emocional')}
-                    className="text-xs"
-                  >
-                    Registrar Como Estou Hoje
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Dieta ativa e Prescrição Soul */}
-          <Card className="border-border/60">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-emerald-600" />
-                  Prescrição Nutricional Ativa
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Diretrizes alimentares da equipe Clínica Soul
-                </CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate('/exames-dietas')}
-                className="text-xs text-emerald-600"
-              >
-                Ver Detalhes
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {activeDiets.length > 0 ? (
-                <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 rounded-xl p-4 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-sm text-emerald-950 dark:text-emerald-200">
-                      {activeDiets[0].title}
-                    </h3>
-                    <Badge className="bg-emerald-600 text-white text-[10px]">Em andamento</Badge>
-                  </div>
-                  {activeDiets[0].objective && (
-                    <p className="text-xs text-muted-foreground italic">
-                      Objetivo: {activeDiets[0].objective}
-                    </p>
-                  )}
-                  {activeDiets[0].prescription && (
-                    <div className="text-xs text-foreground/90 bg-white/70 dark:bg-card/70 p-2.5 rounded-lg border border-emerald-100 max-h-28 overflow-y-auto whitespace-pre-line leading-relaxed">
-                      {activeDiets[0].prescription}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-muted-foreground space-y-2">
-                  <p className="text-sm">Nenhuma dieta ativa cadastrada no momento.</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate('/exames-dietas')}
-                    className="text-xs"
-                  >
-                    Adicionar Dieta / Foto
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Refeições Recentes (com IA) */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                <UtensilsCrossed className="h-4 w-4 text-emerald-600" />
-                Refeições Registradas
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Pratos com alimentos identificados e peso estimado pela IA
-              </p>
-            </div>
             <Button
               size="sm"
-              variant="outline"
-              onClick={() => navigate('/refeicoes')}
-              className="text-xs text-emerald-600"
+              onClick={() => navigate('/registrar')}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              Registrar Refeição
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Registrar
             </Button>
           </div>
+        </div>
 
-          {recentMeals.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {recentMeals.map((meal) => (
-                <Card
-                  key={meal.id}
-                  className="overflow-hidden border-border/60 hover:shadow-md transition-shadow"
-                >
-                  {meal.photo_url || meal.photo ? (
-                    <div className="h-36 w-full overflow-hidden bg-muted relative">
-                      <img
-                        src={meal.photo || meal.photo_url}
-                        alt={meal.title || 'Refeição'}
-                        className="w-full h-full object-cover"
-                      />
-                      <Badge className="absolute top-2 right-2 bg-black/70 text-white text-[10px] backdrop-blur-sm">
-                        {meal.meal_type.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                  ) : (
-                    <div className="h-24 bg-muted/50 flex items-center justify-center text-muted-foreground">
-                      <UtensilsCrossed className="h-6 w-6 opacity-40" />
-                    </div>
-                  )}
-                  <CardContent className="p-3.5 space-y-1.5">
-                    <div className="flex items-start justify-between gap-1">
-                      <h4 className="font-semibold text-xs text-foreground line-clamp-1">
-                        {meal.title || 'Refeição Registrada'}
-                      </h4>
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                        {meal.date_time.slice(11, 16) || meal.date_time}
+        {/* Cards de métricas (estilo Guava) */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Métricas</h2>
+            <button
+              type="button"
+              onClick={() => setEditingCards((v) => !v)}
+              className="text-xs text-emerald-600 hover:underline flex items-center gap-1"
+            >
+              {editingCards ? 'Concluir' : 'Editar'}
+              <Pencil className="h-3 w-3" />
+            </button>
+          </div>
+
+          {editingCards ? (
+            <div className="rounded-xl border border-dashed p-3 space-y-3 bg-muted/20">
+              <div className="space-y-2">
+                {visibleCards.map((id, idx) => {
+                  const def = METRIC_CARDS.find((c) => c.id === id)
+                  if (!def) return null
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-2 rounded-lg bg-card border px-3 py-2"
+                    >
+                      <span className="text-xs font-medium flex-1">
+                        {def.name}{' '}
+                        <span className="text-muted-foreground text-[10px]">({def.unit})</span>
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={idx === 0 || savingOrder}
+                        onClick={() => moveCard(id, -1)}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={idx === visibleCards.length - 1 || savingOrder}
+                        onClick={() => moveCard(id, 1)}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        disabled={savingOrder}
+                        onClick={() => removeCard(id)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
+                  )
+                })}
+                {visibleCards.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhuma métrica selecionada — adicione abaixo.
+                  </p>
+                )}
+              </div>
 
-                    {meal.items_detected && (
-                      <p className="text-[11px] text-muted-foreground line-clamp-2">
-                        {meal.items_detected}
-                      </p>
-                    )}
+              <div>
+                <p className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                  Adicionar métrica:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {METRIC_CARDS.filter((c) => !visibleCards.includes(c.id)).map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => addCard(c.id)}
+                      className="text-[11px] px-2.5 py-1 rounded-full border bg-card hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 transition-colors"
+                    >
+                      + {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                    <div className="flex items-center gap-2 pt-1 text-[11px] font-medium text-foreground">
-                      {meal.estimated_weight_g ? (
-                        <span className="bg-muted px-2 py-0.5 rounded text-[10px]">
-                          ⚖️ {meal.estimated_weight_g}g
-                        </span>
-                      ) : null}
-                      {meal.estimated_calories ? (
-                        <span className="bg-amber-50 text-amber-800 dark:bg-amber-950/40 px-2 py-0.5 rounded text-[10px]">
-                          🔥 {meal.estimated_calories} kcal
-                        </span>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button size="sm" variant="ghost" onClick={() => setEditingCards(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={savingOrder}
+                  onClick={() => {
+                    persistCards(visibleCards)
+                    setEditingCards(false)
+                  }}
+                >
+                  {savingOrder ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="bg-muted/20 border border-dashed rounded-xl p-6 text-center text-muted-foreground space-y-2">
-              <p className="text-xs">Nenhuma refeição registrada ainda.</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate('/refeicoes')}
-                className="text-xs"
-              >
-                Fotografar ou Descrever Prato
-              </Button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+              {cards.map((c) => (
+                <MetricCard key={c.def.id} data={c} />
+              ))}
             </div>
           )}
         </section>
+
+        {/* Medicações + Sintomas lado a lado */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Medicações em uso</CardTitle>
+              <Link to="/exames-dietas" className="text-xs text-emerald-600 hover:underline">
+                Todas
+              </Link>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {medRows.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum medicamento contínuo cadastrado.{' '}
+                  <Link to="/exames-dietas" className="text-emerald-600 hover:underline">
+                    Cadastrar
+                  </Link>
+                </p>
+              )}
+              {medRows.length > 0 && (
+                <>
+                  <div className="grid grid-cols-[1fr_repeat(7,22px)] gap-y-1.5 items-center">
+                    <span />
+                    {weekDays.map((d, i) => (
+                      <span
+                        key={i}
+                        className={`text-[10px] text-center ${
+                          d.isToday ? 'text-emerald-700 font-bold' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {d.letter}
+                      </span>
+                    ))}
+                    {medRows.map((med) => (
+                      <div key={med.id} className="contents">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{med.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {[med.dosage, med.times.length ? med.times.join(' · ') : '']
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
+                        </div>
+                        {med.weekDoses.map((doses, i) => (
+                          <span
+                            key={i}
+                            className={`justify-self-center text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${
+                              doses > 0
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
+                                : 'text-muted-foreground/50'
+                            }`}
+                          >
+                            {doses > 0 ? `${doses}x` : '–'}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs flex-1"
+                      onClick={() => navigate('/registrar?category=remedio')}
+                    >
+                      Tomei medicação
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs text-emerald-600"
+                      onClick={() => navigate('/exames-dietas')}
+                    >
+                      Horários
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <CardTitle className="text-sm">Sintomas</CardTitle>
+                <Link
+                  to="/registrar?category=sintoma"
+                  className="text-xs text-emerald-600 hover:underline"
+                >
+                  Registrar
+                </Link>
+              </div>
+              <div className="flex items-center gap-1">
+                {([7, 28, 90] as const).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setSymptomWindow(w)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                      symptomWindow === w
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {w === 90 ? '3 meses' : `${w} dias`}
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {symptomRows.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum sintoma registrado nesta janela.
+                </p>
+              )}
+              {symptomRows.map((s) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate">{s.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      severidade {s.severity}/10 • {s.count} registro{s.count > 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
+                    <div
+                      className="h-full rounded-full bg-amber-500"
+                      style={{ width: `${Math.min(100, s.severity * 10)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Diário do dia + resumo da semana */}
+        <Card className="border-border/60">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-1.5">
+                <Smile className="h-4 w-4 text-violet-600" />
+                Diário emocional
+              </CardTitle>
+              <CardDescription className="text-[11px]">Hoje e resumo da semana</CardDescription>
+            </div>
+            <Link to="/diario-emocional" className="text-xs text-violet-600 hover:underline">
+              Abrir diário
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {todayDiary ? (
+              <div className="rounded-xl bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 p-3 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold">{todayDiary.mood_label}</span>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] border-violet-200 text-violet-700"
+                  >
+                    {todayDiary.mood_score}/5
+                  </Badge>
+                </div>
+                {todayDiary.affecting_factors && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {todayDiary.affecting_factors}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed p-3">
+                <p className="text-xs text-muted-foreground">Nenhum check-in hoje ainda.</p>
+                <Button size="sm" variant="outline" onClick={() => navigate('/diario-emocional')}>
+                  Fazer check-in
+                </Button>
+              </div>
+            )}
+
+            {emoSummary.logs.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">Semana:</span>
+                <span>
+                  Humor médio{' '}
+                  <b className="text-foreground">
+                    {emoSummary.avgMood ? emoSummary.avgMood.toFixed(1) : '--'}/5
+                  </b>
+                </span>
+                <span>
+                  Energia{' '}
+                  <b className="text-foreground">
+                    {emoSummary.avgEnergy ? emoSummary.avgEnergy.toFixed(1) : '--'}/5
+                  </b>
+                </span>
+                <span>
+                  Estresse{' '}
+                  <b className="text-foreground">
+                    {emoSummary.avgStress ? emoSummary.avgStress.toFixed(1) : '--'}/5
+                  </b>
+                </span>
+                <span>({emoSummary.logs.length} registros)</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Linha do tempo do dia */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Hoje — linha do tempo</h2>
+            <div className="flex items-center gap-1.5">
+              <QuickBtn
+                icon={Droplets}
+                label="Água"
+                onClick={() => navigate('/registrar?category=agua')}
+              />
+              <QuickBtn
+                icon={Coffee}
+                label="Café"
+                onClick={() => navigate('/registrar?category=cafe')}
+              />
+              <QuickBtn
+                icon={UtensilsCrossed}
+                label="Comida"
+                onClick={() => navigate('/refeicoes')}
+              />
+              <QuickBtn
+                icon={ClipboardList}
+                label="Sintomas"
+                onClick={() => navigate('/registrar?category=sintoma')}
+              />
+              <QuickBtn icon={Plus} label="Add" onClick={() => navigate('/registrar')} />
+            </div>
+          </div>
+
+          <Card className="border-border/60">
+            <CardContent className="p-4">
+              {loading ? (
+                <p className="text-xs text-muted-foreground">Carregando registros...</p>
+              ) : todayEntries.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nada registrado ainda hoje. Use os botões acima para começar — tudo entra na linha
+                  do tempo.
+                </p>
+              ) : (
+                <div className="relative pl-2">
+                  <div className="absolute left-[13px] top-1 bottom-1 w-px bg-border" />
+                  <div className="space-y-2.5">
+                    {todayEntries.map((e) => (
+                      <TimelineRow key={e.id} entry={e} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       </main>
     </div>
+  )
+}
+
+// ---------- Sub-componentes ----------
+
+function MetricCard({ data }: { data: MetricCardData }) {
+  const Icon = data.def.icon
+  return (
+    <div className="rounded-xl border bg-card p-3 hover:shadow-sm transition-shadow">
+      <div className="flex items-center gap-1.5 mb-1">
+        {Icon ? (
+          <span
+            className={`h-5 w-5 rounded-md flex items-center justify-center ${data.def.bgClass}`}
+          >
+            <Icon className="h-3 w-3" />
+          </span>
+        ) : null}
+        <span className="text-[11px] font-medium text-muted-foreground truncate">
+          {data.def.name}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className={`text-lg font-bold ${data.def.colorClass}`}>{data.value}</span>
+        <span className="text-[10px] text-muted-foreground">{data.def.unit}</span>
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-0.5">{data.when}</p>
+    </div>
+  )
+}
+
+function TimelineRow({ entry }: { entry: TimelineEntry }) {
+  const Icon = entry.icon
+  return (
+    <div className="flex items-start gap-2.5 relative">
+      <span
+        className={`h-6 w-6 rounded-full bg-card border flex items-center justify-center shrink-0 z-10 ${entry.colorClass}`}
+      >
+        {Icon ? <Icon className="h-3 w-3" /> : <UtensilsCrossed className="h-3 w-3" />}
+      </span>
+      <div className="flex items-baseline gap-2 min-w-0 flex-1">
+        <span className="text-[10px] text-muted-foreground tabular-nums w-9 shrink-0">
+          {entry.time}
+        </span>
+        <span className="text-xs font-medium text-foreground truncate">{entry.title}</span>
+        {entry.detail && (
+          <span className="text-[11px] text-muted-foreground truncate">{entry.detail}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function QuickBtn({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: any
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border bg-card hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+    >
+      <Icon className="h-3 w-3" />
+      {label}
+    </button>
   )
 }
