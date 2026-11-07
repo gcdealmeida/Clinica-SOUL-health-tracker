@@ -11,6 +11,7 @@ import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 import { toast } from 'sonner'
 import {
@@ -28,14 +29,14 @@ import {
 } from 'lucide-react'
 import {
   buildMetricCards,
-  buildTimeline,
+  buildDayStrip,
   buildMedRows,
   buildSymptomRows,
   weekEmotionalSummary,
   lastWeekDays,
   METRIC_CARDS,
   MetricCardData,
-  TimelineEntry,
+  DayStripData,
 } from '@/lib/dashboard'
 
 export default function HomePage() {
@@ -87,9 +88,9 @@ export default function HomePage() {
 
   // ----- Derivações -----
   const cards = useMemo(() => buildMetricCards(visibleCards, metrics), [visibleCards, metrics])
-  const todayEntries = useMemo(
+  const dayStrip = useMemo<DayStripData>(
     () =>
-      buildTimeline(
+      buildDayStrip(
         metrics.filter((m) => (m.date_time || '').slice(0, 10) === today),
         meals.filter((m) => (m.date_time || '').slice(0, 10) === today),
         emotionalLogs.filter((l) => (l.date || '').slice(0, 10) === today),
@@ -177,6 +178,51 @@ export default function HomePage() {
             </Button>
           </div>
         </div>
+
+        {/* Faixa horizontal do dia (estilo Guava) — topo do painel */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-foreground">Hoje — linha do tempo</h2>
+            <div className="flex items-center gap-1.5">
+              <QuickBtn
+                icon={Droplets}
+                label="Água"
+                onClick={() => navigate('/registrar?category=agua')}
+              />
+              <QuickBtn
+                icon={Coffee}
+                label="Café"
+                onClick={() => navigate('/registrar?category=cafe')}
+              />
+              <QuickBtn
+                icon={UtensilsCrossed}
+                label="Comida"
+                onClick={() => navigate('/refeicoes')}
+              />
+              <QuickBtn
+                icon={ClipboardList}
+                label="Sintomas"
+                onClick={() => navigate('/registrar?category=sintoma')}
+              />
+              <QuickBtn icon={Plus} label="Add" onClick={() => navigate('/registrar')} />
+            </div>
+          </div>
+
+          <Card className="border-border/60">
+            <CardContent className="p-4">
+              {loading ? (
+                <p className="text-xs text-muted-foreground">Carregando registros...</p>
+              ) : dayStrip.segments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nada registrado ainda hoje. Use os botões acima para começar — tudo entra na linha
+                  do tempo.
+                </p>
+              ) : (
+                <DayStrip strip={dayStrip} />
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
         {/* Cards de métricas (estilo Guava) */}
         <section className="space-y-2">
@@ -490,58 +536,6 @@ export default function HomePage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Linha do tempo do dia */}
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Hoje — linha do tempo</h2>
-            <div className="flex items-center gap-1.5">
-              <QuickBtn
-                icon={Droplets}
-                label="Água"
-                onClick={() => navigate('/registrar?category=agua')}
-              />
-              <QuickBtn
-                icon={Coffee}
-                label="Café"
-                onClick={() => navigate('/registrar?category=cafe')}
-              />
-              <QuickBtn
-                icon={UtensilsCrossed}
-                label="Comida"
-                onClick={() => navigate('/refeicoes')}
-              />
-              <QuickBtn
-                icon={ClipboardList}
-                label="Sintomas"
-                onClick={() => navigate('/registrar?category=sintoma')}
-              />
-              <QuickBtn icon={Plus} label="Add" onClick={() => navigate('/registrar')} />
-            </div>
-          </div>
-
-          <Card className="border-border/60">
-            <CardContent className="p-4">
-              {loading ? (
-                <p className="text-xs text-muted-foreground">Carregando registros...</p>
-              ) : todayEntries.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Nada registrado ainda hoje. Use os botões acima para começar — tudo entra na linha
-                  do tempo.
-                </p>
-              ) : (
-                <div className="relative pl-2">
-                  <div className="absolute left-[13px] top-1 bottom-1 w-px bg-border" />
-                  <div className="space-y-2.5">
-                    {todayEntries.map((e) => (
-                      <TimelineRow key={e.id} entry={e} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
       </main>
     </div>
   )
@@ -574,25 +568,81 @@ function MetricCard({ data }: { data: MetricCardData }) {
   )
 }
 
-function TimelineRow({ entry }: { entry: TimelineEntry }) {
-  const Icon = entry.icon
+/**
+ * Faixa horizontal 0h→24h (estilo Guava):
+ * - segmentos coloridos apenas para sono (início do dia → acordar) e hora de ir dormir
+ * - ícones pequenos por categoria em ordem cronológica, sem hora visível
+ * - hora aparece só no tooltip (hover/touch)
+ */
+function DayStrip({ strip }: { strip: DayStripData }) {
+  const navigate = useNavigate()
+
   return (
-    <div className="flex items-start gap-2.5 relative">
-      <span
-        className={`h-6 w-6 rounded-full bg-card border flex items-center justify-center shrink-0 z-10 ${entry.colorClass}`}
-      >
-        {Icon ? <Icon className="h-3 w-3" /> : <UtensilsCrossed className="h-3 w-3" />}
-      </span>
-      <div className="flex items-baseline gap-2 min-w-0 flex-1">
-        <span className="text-[10px] text-muted-foreground tabular-nums w-9 shrink-0">
-          {entry.time}
-        </span>
-        <span className="text-xs font-medium text-foreground truncate">{entry.title}</span>
-        {entry.detail && (
-          <span className="text-[11px] text-muted-foreground truncate">{entry.detail}</span>
-        )}
+    <TooltipProvider delayDuration={150}>
+      <div className="space-y-1.5">
+        {/* faixa com segmentos */}
+        <div className="relative h-2.5 rounded-full bg-muted overflow-visible">
+          <div className="absolute inset-0 flex rounded-full overflow-hidden">
+            {strip.bands.map((b, i) => (
+              <div
+                key={i}
+                className={`h-full ${b.className}`}
+                style={{ width: `${Math.max(0, b.widthPct)}%` }}
+                title={b.label}
+              />
+            ))}
+          </div>
+
+          {/* ícones cronológicos */}
+          {strip.segments.map((seg) => {
+            const Icon = seg.entry.icon || UtensilsCrossed
+            return (
+              <Tooltip key={seg.entry.id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`${seg.entry.title} às ${seg.entry.time}`}
+                    onClick={() => {
+                      if (seg.entry.id.startsWith('meal-')) navigate('/refeicoes')
+                      else if (seg.entry.id.startsWith('emo-')) navigate('/diario-emocional')
+                      else if (seg.entry.id.startsWith('hm-sintoma'))
+                        navigate('/registrar?category=sintoma')
+                      else if (seg.entry.id.startsWith('hm-remedio'))
+                        navigate('/registrar?category=remedio')
+                      else if (seg.entry.id.startsWith('hm-')) navigate('/registrar')
+                      else navigate('/registrar')
+                    }}
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 h-6 w-6 rounded-full bg-card border border-border flex items-center justify-center shadow-sm hover:scale-125 hover:z-20 transition-transform"
+                    style={{ left: `${seg.centerPct}%` }}
+                  >
+                    <Icon className={`h-3 w-3 ${seg.entry.colorClass}`} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  <span className="font-semibold tabular-nums">{seg.entry.time}</span>
+                  {' — '}
+                  {seg.entry.title}
+                  {seg.entry.detail ? ` (${seg.entry.detail})` : ''}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+
+        {/* legenda dos períodos-chave */}
+        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-indigo-200 dark:bg-indigo-900" /> Sono (até
+            acordar{strip.wakeAt ? `, ${strip.wakeAt}` : ''})
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-indigo-300 dark:bg-indigo-800" /> Ir dormir
+            {strip.sleepAt ? `, ${strip.sleepAt}` : ''}
+          </span>
+          <span className="ml-auto">Passe o mouse nos ícones para ver o horário</span>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }
 

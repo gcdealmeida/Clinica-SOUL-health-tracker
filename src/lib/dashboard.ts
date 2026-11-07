@@ -345,6 +345,117 @@ export function buildTimeline(
   return entries.sort((a, b) => b.minutes - a.minutes)
 }
 
+// ---------- Faixa horizontal (estilo Guava) ----------
+
+export interface DayStripBand {
+  /** classe Tailwind de fundo do segmento */
+  className: string
+  /** largura do segmento em % da faixa */
+  widthPct: number
+  /** rótulo mostrado no tooltip do segmento */
+  label: string
+}
+
+export interface DayStripSegment extends DayStripBand {
+  entry: TimelineEntry
+  /** posição do CENTRO do ícone, em % da largura da faixa */
+  centerPct: number
+}
+
+export interface DayStripData {
+  /** horas acordado (00:00) e de dormir — âncoras dos segmentos coloridos */
+  wakeAt: string | null // "HH:MM"
+  sleepAt: string | null // "HH:MM"
+  bands: DayStripBand[]
+  segments: DayStripSegment[]
+}
+
+const pctOf = (minutes: number) => Math.max(0, Math.min(100, (minutes / 1440) * 100))
+
+/**
+ * Distribui os registros do dia ao longo de uma faixa horizontal 0h→24h:
+ * segmentos coloridos apenas para sono (00:00 → acordar) e hora de dormir,
+ * ícones posicionados em ordem cronológica (sem hora visível).
+ */
+export function buildDayStrip(
+  metrics: HealthMetric[],
+  meals: Meal[],
+  emotionalLogs: EmotionalLog[],
+): DayStripData {
+  const entries = buildTimeline(metrics, meals, emotionalLogs)
+  const ordered = [...entries].sort((a, b) => a.minutes - b.minutes)
+
+  // --- âncoras de sono ---
+  let wakeMin: number | null = null
+  let sleepMin: number | null = null
+
+  // hora de acordar/dormir: registro de sono do dia (notes "acordou HH:MM" ou "HH:MM-HH:MM")
+  const sleepRec = metrics.find((m) => m.category === 'sono')
+  if (sleepRec) {
+    const range = sleepRec.notes?.match(/(\d{1,2}):(\d{2})\s*(?:-|–|às)\s*(\d{1,2}):(\d{2})/)
+    if (range) {
+      const a = Number(range[1]) * 60 + Number(range[2])
+      const b = Number(range[3]) * 60 + Number(range[4])
+      // intervalo "HH:MM-HH:MM" → acordar = fim do sono, dormir = início
+      wakeMin = b
+      sleepMin = a
+    } else {
+      // notes "acordou 07:30" ou horário de dormir isolado
+      const woke = sleepRec.notes?.match(/acordou?\s*(\d{1,2}):(\d{2})/)
+      if (woke) wakeMin = Number(woke[1]) * 60 + Number(woke[2])
+      const slept = sleepRec.notes?.match(/dormi(r)?\s*(\d{1,2}):(\d{2})/)
+      if (slept) sleepMin = Number(slept[2]) * 60 + Number(slept[3])
+    }
+  }
+  if (wakeMin === null) {
+    // primeira atividade do dia ≈ hora de acordar
+    const earliest = ordered[0]
+    if (earliest) wakeMin = earliest.minutes
+  }
+  if (sleepMin === null) {
+    // última refeição (jantar/ceia) + 2h, limitado; fallback 22h
+    const lastMeal = ordered
+      .filter((e) => e.title.includes('Jantar') || e.title.includes('Ceia'))
+      .pop()
+    sleepMin = lastMeal ? Math.min(23 * 60 + 59, lastMeal.minutes + 120) : 22 * 60
+  }
+  if (wakeMin !== null && sleepMin !== null && sleepMin < wakeMin) {
+    sleepMin = Math.min(23 * 60 + 59, wakeMin + 4 * 60)
+  }
+
+  const wakePct = wakeMin !== null ? pctOf(wakeMin) : 0
+  const sleepPct = sleepMin !== null ? pctOf(sleepMin) : pctOf(22 * 60)
+
+  const bands: DayStripBand[] = [
+    { className: 'bg-indigo-200 dark:bg-indigo-900', widthPct: wakePct, label: 'Sono' },
+    { className: 'bg-transparent', widthPct: sleepPct - wakePct, label: 'Acordado' },
+    {
+      className: 'bg-indigo-300 dark:bg-indigo-800',
+      widthPct: 100 - sleepPct,
+      label: sleepAtLabel(sleepMin ?? 22 * 60),
+    },
+  ]
+
+  // --- ícones distribuídos em ordem cronológica, sem sobreposição ---
+  const segs: DayStripSegment[] = []
+  let lastPct = -Infinity
+  for (const e of ordered) {
+    let pct = pctOf(e.minutes)
+    if (pct - lastPct < MIN_GAP_PCT) pct = lastPct + MIN_GAP_PCT
+    if (pct > 100) break
+    lastPct = pct
+    segs.push({ entry: e, centerPct: pct, className: '', widthPct: 0, label: '' })
+  }
+  return { wakeAt: fmtMin(wakeMin), sleepAt: fmtMin(sleepMin), bands, segments: segs }
+}
+
+const MIN_GAP_PCT = 100 / 30 // gap mínimo entre ícones (~48 min de "espaço" distribuído)
+
+const fmtMin = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}`
+
+const sleepAtLabel = (m: number) => `Ir dormir (${fmtMin(m)})`
+
 // ---------- Medicações ----------
 
 export interface MedRow {
