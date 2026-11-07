@@ -5,6 +5,8 @@ import { healthService } from '@/services/health'
 import { emotionalService } from '@/services/emotional'
 import { mealService } from '@/services/mealsAndAi'
 import { medicalService } from '@/services/medical'
+import { medicationService, type Medication } from '@/services/medications'
+import { buildPlannedMedRows } from '@/lib/medicationRows'
 import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
 import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
@@ -47,6 +49,7 @@ export default function HomePage() {
   const [emotionalLogs, setEmotionalLogs] = useState<EmotionalLog[]>([])
   const [meals, setMeals] = useState<Meal[]>([])
   const [medRecords, setMedRecords] = useState<MedicalRecord[]>([])
+  const [plannedMeds, setPlannedMeds] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
 
   // Preferência de métricas (cards customizáveis)
@@ -65,17 +68,19 @@ export default function HomePage() {
   const loadAll = async () => {
     try {
       setLoading(true)
-      const [metricList, eList, mealList, medList, prefs] = await Promise.all([
+      const [metricList, eList, mealList, medList, plannedList, prefs] = await Promise.all([
         healthService.listUserMetrics(undefined, 200),
         emotionalService.listLogs(undefined, 30),
         mealService.listMeals(undefined),
         medicalService.listMedicalRecords(undefined),
+        medicationService.list(),
         loadDashboardPreferences(),
       ])
       setMetrics(metricList)
       setEmotionalLogs(eList)
       setMeals(mealList)
       setMedRecords(medList)
+      setPlannedMeds(plannedList)
       setVisibleCards(prefs.metrics)
     } catch (err) {
       console.error('Erro ao carregar dados do painel:', err)
@@ -98,12 +103,14 @@ export default function HomePage() {
     [metrics, meals, emotionalLogs, today],
   )
   const medRows = useMemo(
-    () =>
-      buildMedRows(
+    () => [
+      ...buildPlannedMedRows(plannedMeds),
+      ...buildMedRows(
         medRecords.filter((r) => r.type === 'medicamento_continuo'),
         metrics.filter((m) => m.category === 'remedio'),
       ),
-    [medRecords, metrics],
+    ],
+    [plannedMeds, medRecords, metrics],
   )
   const symptomRows = useMemo(
     () => buildSymptomRows(metrics, symptomWindow),
@@ -339,7 +346,7 @@ export default function HomePage() {
           <Card className="border-border/60">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Medicações em uso</CardTitle>
-              <Link to="/exames-dietas" className="text-xs text-emerald-600 hover:underline">
+              <Link to="/medicamentos" className="text-xs text-emerald-600 hover:underline">
                 Todas
               </Link>
             </CardHeader>
@@ -347,7 +354,7 @@ export default function HomePage() {
               {medRows.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   Nenhum medicamento contínuo cadastrado.{' '}
-                  <Link to="/exames-dietas" className="text-emerald-600 hover:underline">
+                  <Link to="/medicamentos" className="text-emerald-600 hover:underline">
                     Cadastrar
                   </Link>
                 </p>
@@ -409,7 +416,7 @@ export default function HomePage() {
                       size="sm"
                       variant="ghost"
                       className="text-xs text-emerald-600"
-                      onClick={() => navigate('/exames-dietas')}
+                      onClick={() => navigate('/medicamentos')}
                     >
                       Horários
                     </Button>

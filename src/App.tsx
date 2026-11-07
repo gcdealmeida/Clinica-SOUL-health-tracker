@@ -12,6 +12,7 @@ import AuthPage from '@/pages/Auth'
 import RegisterMetricPage from '@/pages/RegisterMetric'
 import ExamsAndDietsPage from '@/pages/ExamsAndDiets'
 import MealsPage from '@/pages/Meals'
+import MedicationsPage from '@/pages/Medications'
 import EmotionalDiaryPage from '@/pages/EmotionalDiary'
 import AiAnalysesPage from '@/pages/AiAnalyses'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/registrar" element={<RegisterMetricPage />} />
               <Route path="/exames-dietas" element={<ExamsAndDietsPage />} />
+              <Route path="/medicamentos" element={<MedicationsPage />} />
               <Route path="/refeicoes" element={<MealsPage />} />
               <Route path="/diario-emocional" element={<EmotionalDiaryPage />} />
               <Route path="/analises" element={<AiAnalysesPage />} />
