@@ -168,7 +168,8 @@ routerAdd(
 )
 
 // 2. Endpoint: POST /backend/v1/ai/analyze-meal
-// Analisa foto da refeição ou descrição para listar alimentos e estimar peso e calorias
+// Analisa a FOTO real do prato (imagem multimodal enviada como base64 data URL)
+// ou uma descrição textual, lista os alimentos e estima peso e calorias.
 routerAdd(
   'POST',
   '/backend/v1/ai/analyze-meal',
@@ -179,14 +180,63 @@ routerAdd(
     }
 
     const body = e.requestInfo().body || {}
-    const description = body.description || ''
-    const photoUrl = body.photoUrl || ''
+    const description = (body.description || '').trim()
     const mealType = body.mealType || 'almoco'
 
+    // A foto chega como data URL "data:image/jpeg;base64,..." gerada no app.
+    // O app comprime/redimensiona a imagem antes de enviar (limite ~4MB em base64).
+    const photoDataUrl = (body.photoBase64 || '').trim()
+    const MAX_IMAGE_B64 = 5 * 1024 * 1024 // ~5MB de base64 decodificado ≈ 3.7MB de imagem
+    if (photoDataUrl && photoDataUrl.length > MAX_IMAGE_B64) {
+      return e.badRequestError(
+        'A foto é muito grande para análise. Tente uma imagem menor ou de melhor compressão.',
+      )
+    }
+
+    // Precisa de pelo menos um insumo real: foto OU descrição do cliente.
+    if (!photoDataUrl && !description) {
+      return e.badRequestError(
+        'Envie uma foto do prato ou uma descrição da refeição para a análise.',
+      )
+    }
+
+    // Monta o conteúdo multimodal da mensagem do usuário (formato OpenAI Vision):
+    // partes de texto + parte de imagem (data URL base64). O gateway Skip repassa
+    // ao modelo com suporte a visão; sem imagem, cai para mensagem só de texto.
+    const userContent = []
+    let textPart =
+      'Refeição registrada: ' +
+      mealType +
+      '\n' +
+      (description
+        ? 'Descrição e notas do cliente: ' + description + '\n'
+        : 'O cliente não adicionou descrição — analise SOMENTE a foto.\n') +
+      '\n' +
+      'Analise a foto do prato anexada e responda estritamente no JSON solicitado, ' +
+      'identificando os alimentos visíveis, o peso estimado de cada porção em gramas ' +
+      'e o peso total do prato.'
+
+    if (photoDataUrl) {
+      textPart =
+        'Uma FOTO REAL do prato do cliente está anexada nesta mensagem. Analise a imagem ' +
+        'visualmente — identifique cada alimento visível, estime o peso de cada porção em ' +
+        'gramas e o peso total do prato com base no que aparece na foto.\n\n' +
+        textPart
+      userContent.push({ type: 'text', text: textPart })
+      userContent.push({ type: 'image_url', image_url: { url: photoDataUrl } })
+    } else {
+      userContent.push({ type: 'text', text: textPart })
+    }
+
     const systemPrompt =
-      'Você é um nutricionista especialista da Clínica Soul. ' +
-      'Seu papel é analisar refeições (a partir de foto ou descrição detalhada), listar todos os alimentos presentes de forma discriminada, estimar com bom senso o peso total em gramas de cada porção e do prato, calorias aproximadas e fazer uma avaliação nutricional saudável. ' +
-      'Você DEVE responder SEMPRE em JSON válido com a estrutura: ' +
+      'Você é um nutricionista especialista da Clínica Soul com capacidade de visão computacional. ' +
+      'Seu papel é analisar a FOTO anexada da refeição (e a descrição do cliente, se houver), identificar visualmente ' +
+      'todos os alimentos presentes de forma discriminada, estimar com bom senso o peso total em gramas de cada porção e do prato ' +
+      '(use referências visuais: tamanho do prato, talheres, copos para calibrar a escala), ' +
+      'calorias aproximadas e fazer uma avaliação nutricional saudável. ' +
+      'Se a imagem não mostrar comida, ou estiver ilegível/borrada demais para análise, NÃO invente alimentos: ' +
+      'responda exatamente {"error": "Não foi possível identificar alimentos legíveis na foto. Envie uma foto mais nítida do prato."} ' +
+      'Você DEVE responder SEMPRE em JSON válido, sem texto fora do JSON, com a estrutura: ' +
       '{' +
       '  "title": "nome curto do prato", ' +
       '  "items": [{"name": "alimento", "weight_g": 120, "calories": 150}], ' +
@@ -196,56 +246,89 @@ routerAdd(
       '  "nutritional_assessment": "avaliação do prato e dicas da Clínica Soul"' +
       '}'
 
-    const userPrompt =
-      'Refeição: ' +
-      mealType +
-      '\n' +
-      'Foto informada: ' +
-      (photoUrl ? photoUrl : 'Foto enviada pelo cliente no app') +
-      '\n' +
-      'Descrição e notas do cliente: ' +
-      (description || 'Prato servido na refeição') +
-      '\n\n' +
-      'Por favor, identifique os ingredientes e componentes do prato, estime o peso de cada porção em gramas e do total, calcule as calorias e forneça a resposta estritamente no JSON solicitado.'
-
     try {
       const reply = $ai.chat({
         model: 'fast',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: userContent },
         ],
       })
 
-      const content =
+      const raw =
         reply.choices && reply.choices[0] && reply.choices[0].message
-          ? reply.choices[0].message.content
-          : '{}'
+          ? String(reply.choices[0].message.content || '')
+          : ''
 
-      // Tenta extrair JSON do texto retornado pela IA
+      // Parse defensivo: tira cercas de código ```json ... ``` e pega o 1º objeto balanceado.
       let parsed = null
-      try {
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          parsed = JSON.parse(jsonMatch[0])
-        }
-      } catch (_) {}
-
-      if (!parsed) {
-        parsed = {
-          title: description || 'Refeição Saudável Soul',
-          items: [{ name: description || 'Porção equilibrada', weight_g: 300, calories: 400 }],
-          total_weight_g: 300,
-          total_calories: 400,
-          macronutrients: { protein_g: 25, carbs_g: 40, fat_g: 12 },
-          nutritional_assessment: content,
+      let parseAttempt = raw.trim()
+      const fence = parseAttempt.match(/```(?:json)?\s*([\s\S]*?)```/i)
+      if (fence) parseAttempt = fence[1].trim()
+      // Primeiro "{" até o último "}" — cobre preâmbulos curtos antes do JSON.
+      const start = parseAttempt.indexOf('{')
+      const end = parseAttempt.lastIndexOf('}')
+      if (start !== -1 && end > start) {
+        try {
+          parsed = JSON.parse(parseAttempt.slice(start, end + 1))
+        } catch (_) {
+          parsed = null
         }
       }
 
-      return e.json(200, parsed)
+      // A IA pode sinalizar que a foto não tem comida legível: repassa como erro claro.
+      if (parsed && parsed.error) {
+        return e.badRequestError(String(parsed.error))
+      }
+
+      // Validação estrita: um resultado sem itens identificáveis NÃO é sucesso.
+      const items = parsed && Array.isArray(parsed.items) ? parsed.items : []
+      const validItems = items.filter(
+        (it) =>
+          it && typeof it.name === 'string' && it.name.trim().length > 0 && Number(it.weight_g) > 0,
+      )
+      const totalWeight = parsed ? Number(parsed.total_weight_g) || 0 : 0
+
+      if (!parsed || validItems.length === 0 || totalWeight <= 0) {
+        console.log(
+          'analyze-meal: resposta da IA sem itens utilizáveis. Conteúdo bruto: ' +
+            raw.slice(0, 400),
+        )
+        return e.badRequestError(
+          'A IA não conseguiu identificar os alimentos desta foto. Tente refazer a foto ' +
+            'com boa iluminação, prato centralizado e todos os alimentos visíveis — ou ' +
+            'descreva a refeição no campo de descrição.',
+        )
+      }
+
+      const result = {
+        title:
+          typeof parsed.title === 'string' && parsed.title.trim()
+            ? parsed.title.trim()
+            : 'Refeição',
+        items: validItems.map((it) => ({
+          name: String(it.name).trim(),
+          weight_g: Math.round(Number(it.weight_g) || 0),
+          calories: Math.round(Number(it.calories) || 0),
+        })),
+        total_weight_g: Math.round(totalWeight),
+        total_calories: Math.round(Number(parsed.total_calories) || 0),
+        macronutrients: {
+          protein_g: Math.round(
+            Number(parsed.macronutrients && parsed.macronutrients.protein_g) || 0,
+          ),
+          carbs_g: Math.round(Number(parsed.macronutrients && parsed.macronutrients.carbs_g) || 0),
+          fat_g: Math.round(Number(parsed.macronutrients && parsed.macronutrients.fat_g) || 0),
+        },
+        nutritional_assessment: String(parsed.nutritional_assessment || ''),
+      }
+
+      return e.json(200, result)
     } catch (err) {
       console.log('Erro no reconhecimento de refeição:', err.message)
-      return e.json(500, { error: 'Erro na análise de refeição: ' + err.message })
+      return e.json(500, {
+        error: 'Falha na análise da refeição pela inteligência artificial: ' + err.message,
+      })
     }
   },
   $apis.requireAuth(),

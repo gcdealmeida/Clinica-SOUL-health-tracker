@@ -39,7 +39,7 @@ export const mealService = {
   },
 
   async analyzeMealWithAi(data: {
-    photoUrl?: string
+    photoBase64?: string
     description: string
     mealType: string
   }): Promise<MealAiDetectionResult> {
