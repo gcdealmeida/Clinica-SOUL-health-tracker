@@ -338,7 +338,7 @@ routerAdd(
       }
 
       // Roda a cascata de tentativas para UMA imagem e devolve o melhor
-      // resultado: { parsed, raw, modelUsed, imageNeverArrived, lastErrSummary }.
+      // resultado: { parsed, raw, modelUsed, imageNeverArrived, lastErrDetail }.
       const runLadder = (imageUrl) => {
         const attempts = [
           { model: 'reasoning', variant: 'object-high' },
@@ -346,6 +346,8 @@ routerAdd(
           { model: 'reasoning', variant: 'string-url' },
           { model: 'fast', variant: 'object' },
           { model: 'fast', variant: 'string-url' },
+          { model: 'vision', variant: 'object' },
+          { model: 'vision', variant: 'string-url' },
         ]
         let parsed = null
         let raw = ''
@@ -454,22 +456,23 @@ routerAdd(
 
       // Se TODAS as tentativas falharam com erro de GATEWAY (nenhum modelo
       // chegou a responder) e temos foto, o único parâmetro que ainda não
-      // testamos é o TAMANHO da imagem: refaz a cascata inteira com uma
-      // imagem menor (768px de lado), como retry automático.
+      // testamos é o TAMANHO da imagem: devolve 503 com um código estruturado
+      // para o app refazer a análise com uma imagem menor (768px), no front —
+      // o JSVM do PocketBase não tem atob/btoa/canvas, então o resize tem que
+      // acontecer lá (memória: helpers do JSVM não têm essas APIs).
       if (photoDataUrl && !parsed && !modelUsed && !imageNeverArrived) {
         console.log(
-          'analyze-meal: todas as tentativas falharam no gateway — tentando com imagem menor (768px).',
+          'analyze-meal: ' +
+            (lastErrDetail || 'todas as tentativas falharam no gateway') +
+            ' — solicitando retry no app com imagem menor (768px).',
         )
-        const smallerDataUrl = resizeDataUrl(photoDataUrl, 768)
-        if (smallerDataUrl && smallerDataUrl.length < photoDataUrl.length) {
-          const retry = runLadder(smallerDataUrl)
-          parsed = retry.parsed
-          raw = retry.raw
-          modelUsed = retry.modelUsed
-          imageNeverArrived = retry.imageNeverArrived
-          lastErrSummary = retry.lastErrSummary
-          lastErrDetail = retry.lastErrDetail
-        }
+        return e.json(503, {
+          error:
+            'O serviço de IA recusou a foto (' +
+            (lastErrSummary || 'erro no gateway') +
+            '). Vamos tentar novamente com a imagem em resolução menor.',
+          code: 'GATEWAY_REJECTED_IMAGE',
+        })
       }
 
       // A IA pode sinalizar que a foto não tem comida legível: repassa como erro claro.

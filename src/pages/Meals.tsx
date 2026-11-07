@@ -90,7 +90,7 @@ export default function MealsPage() {
   // data URL base64 pronta para ser enviada à IA — blob: e URLs gigantes nunca
   // vão ao backend. A qualidade 0.9 preserva nitidez suficiente para a IA ler
   // texturas dos alimentos sem estourar o payload.
-  const compressPhoto = (file: File): Promise<string> =>
+  const compressPhoto = (file: File, maxSide = 1280, quality = 0.9): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onerror = () => reject(new Error('Não foi possível ler a foto selecionada'))
@@ -98,7 +98,6 @@ export default function MealsPage() {
         const img = new Image()
         img.onerror = () => reject(new Error('Formato de imagem não suportado'))
         img.onload = () => {
-          const maxSide = 1280
           const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
           const canvas = document.createElement('canvas')
           canvas.width = Math.max(1, Math.round(img.width * scale))
@@ -114,7 +113,7 @@ export default function MealsPage() {
           ctx.imageSmoothingEnabled = true
           ctx.imageSmoothingQuality = 'high'
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-          resolve(canvas.toDataURL('image/jpeg', 0.9))
+          resolve(canvas.toDataURL('image/jpeg', quality))
         }
         img.src = reader.result as string
       }
@@ -132,11 +131,7 @@ export default function MealsPage() {
       // Envia a FOTO REAL (base64 comprimida) para a IA enxergar o prato.
       // Sem foto, a análise usa apenas a descrição escrita pelo cliente.
       const photoBase64 = photoFile ? await compressPhoto(photoFile) : undefined
-      const result = await mealService.analyzeMealWithAi({
-        photoBase64,
-        description: description.trim(),
-        mealType,
-      })
+      const result = await runMealAnalysis(photoBase64, description.trim(), mealType)
 
       setAiResult(result)
       setCustomTitle(result.title)
@@ -156,10 +151,8 @@ export default function MealsPage() {
         err?.response?.message ||
         err?.message ||
         'Não foi possível analisar a foto do prato. Tente novamente.'
-      // O hook devolve 400 com mensagem clara quando a IA realmente não
-      // consegue identificar alimentos — exibimos a causa real, sem fabricar
-      // resultado. Se a falha foi na entrega da imagem (503), o toast já
-      // mostra o pedido de retry descrito pelo backend.
+      // O hook devolve 400/503 com mensagem clara (e o motivo real, quando o
+      // modelo ou o gateway recusam) — exibimos a causa sem fabricar resultado.
       const msg =
         typeof raw === 'string'
           ? raw
@@ -167,6 +160,30 @@ export default function MealsPage() {
       toast.error(msg)
     } finally {
       setAnalyzingAi(false)
+    }
+  }
+
+  // Chama a análise uma vez; quando o backend responde 503
+  // GATEWAY_REJECTED_IMAGE, refaz automaticamente com a imagem em 768px
+  // (o resize só é possível no front — o JSVM do PocketBase não tem
+  // atob/btoa/canvas para decodificar o JPEG no servidor).
+  const runMealAnalysis = async (
+    photoBase64: string | undefined,
+    description: string,
+    mealType: string,
+  ) => {
+    try {
+      return await mealService.analyzeMealWithAi({ photoBase64, description, mealType })
+    } catch (err: any) {
+      if (err?.response?.code === 'GATEWAY_REJECTED_IMAGE' && photoBase64) {
+        const smaller = await compressPhoto(photoFile as File, 768, 0.8)
+        return await mealService.analyzeMealWithAi({
+          photoBase64: smaller,
+          description,
+          mealType,
+        })
+      }
+      throw err
     }
   }
 
