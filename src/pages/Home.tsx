@@ -364,7 +364,7 @@ export default function HomePage() {
                 onClick={() => setOnceOpen(true)}
               >
                 <Pill className="h-3.5 w-3.5 mr-1" />
-                Toma pontual (febre, dor de cabeça...)
+                Adicionar Medicação
               </Button>
               {medRows.length === 0 && (
                 <p className="text-xs text-muted-foreground">

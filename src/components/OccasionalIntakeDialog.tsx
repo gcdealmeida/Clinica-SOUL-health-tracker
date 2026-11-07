@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useEffect, useState } from 'react'
 import { medicationService } from '@/services/medications'
 import { useActiveIngredientSearch } from '@/hooks/use-active-ingredient-search'
+import { weekdayLetter } from '@/lib/dashboard'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Check, Info, Loader2, Pill } from 'lucide-react'
+import { Check, Clock, Info, Loader2, Pill, Plus, Repeat, Zap } from 'lucide-react'
 
 interface OccasionalIntakeDialogProps {
   open: boolean
@@ -27,57 +27,114 @@ const nowHHMM = () => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+type MedMode = 'esporadica' | 'recorrente'
+
 /**
- * Cadastro rápido de toma PONTUAL: remédio (com buscador de princípio ativo
- * da ANVISA + preenchimento manual), dosagem e horário da toma — sem rotina
- * diária/semanal. Cria a medicação com routine 'once' (ou reutiliza a de
- * mesmo nome) e grava a toma como health_metrics 'remedio' com notes "pontual".
+ * "Adicionar Medicação" no painel Hoje:
+ * - Esporádica (padrão): toma pontual, só horário + Registrar — cria medicação
+ *   routine 'once' (reutilizando a de mesmo nome) e grava a toma como
+ *   health_metrics 'remedio' com notes "pontual".
+ * - Recorrente: dias da semana (multi-seleção) + horário(s) — cria a medicação
+ *   com rotina diária (todos os dias) ou semanal (dias escolhidos), para aparecer
+ *   na grade semanal de controle do painel Hoje.
+ * Ambos os modos usam o buscador de princípio ativo da ANVISA.
  */
 export function OccasionalIntakeDialog({
   open,
   onOpenChange,
   onSaved,
 }: OccasionalIntakeDialogProps) {
-  const { user } = useAuth()
+  const [mode, setMode] = useState<MedMode>('esporadica')
   const [name, setName] = useState('')
   const [dosage, setDosage] = useState('')
   const [time, setTime] = useState(nowHHMM())
+  const [weekdays, setWeekdays] = useState<number[]>([])
+  const [times, setTimes] = useState<string[]>(['08:00'])
   const [activeIngredient, setActiveIngredient] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const { results, loading: searching, failed, source } = useActiveIngredientSearch(name)
 
+  // reabrir o diálogo volta ao estado inicial (Esporádica)
+  useEffect(() => {
+    if (open) {
+      setMode('esporadica')
+      setName('')
+      setDosage('')
+      setTime(nowHHMM())
+      setWeekdays([])
+      setTimes(['08:00'])
+      setActiveIngredient('')
+      setShowSuggestions(true)
+    }
+  }, [open])
+
   const reset = () => {
     setName('')
     setDosage('')
     setTime(nowHHMM())
+    setWeekdays([])
+    setTimes(['08:00'])
     setActiveIngredient('')
     setShowSuggestions(true)
   }
 
-  const canSave = name.trim().length > 0 && /^([01]\d|2[0-3]):[0-5]\d$/.test(time.trim())
+  const toggleWeekday = (d: number) =>
+    setWeekdays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()))
+
+  const updateTime = (index: number, value: string) =>
+    setTimes((prev) => prev.map((t, i) => (i === index ? value : t)))
+
+  const removeTime = (index: number) =>
+    setTimes((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev))
+
+  const canSave =
+    name.trim().length > 0 &&
+    (mode === 'esporadica'
+      ? TIME_RE.test(time.trim())
+      : weekdays.length > 0 && times.some((t) => TIME_RE.test(t.trim())))
 
   const handleSave = async () => {
-    if (!user) return
     if (!canSave) {
-      toast.error('Informe o nome do remédio e um horário válido (HH:MM)')
+      toast.error(
+        mode === 'esporadica'
+          ? 'Informe o nome do remédio e um horário válido (HH:MM)'
+          : 'Informe o nome, pelo menos um dia da semana e um horário válido (HH:MM)',
+      )
       return
     }
     setSaving(true)
     try {
-      await medicationService.createOccasionalIntake({
-        name: name.trim(),
-        active_ingredient: activeIngredient.trim(),
-        dosage: dosage.trim(),
-        time: time.trim(),
-      })
-      toast.success('Toma pontual registrada')
+      if (mode === 'esporadica') {
+        await medicationService.createOccasionalIntake({
+          name: name.trim(),
+          active_ingredient: activeIngredient.trim(),
+          dosage: dosage.trim(),
+          time: time.trim(),
+        })
+        toast.success('Toma pontual registrada')
+      } else {
+        const cleanTimes = Array.from(new Set(times.map((t) => t.trim())))
+          .filter((t) => TIME_RE.test(t))
+          .sort()
+        await medicationService.create({
+          name: name.trim(),
+          active_ingredient: activeIngredient.trim(),
+          dosage: dosage.trim(),
+          routine: weekdays.length === 7 ? 'daily' : 'weekly',
+          weekdays: weekdays.length === 7 ? [] : weekdays,
+          times: cleanTimes,
+        })
+        toast.success('Medicação recorrente cadastrada')
+      }
       reset()
       onOpenChange(false)
       onSaved()
     } catch (err: any) {
-      toast.error(err?.message || 'Não foi possível registrar a toma pontual')
+      toast.error(err?.message || 'Não foi possível salvar a medicação')
     } finally {
       setSaving(false)
     }
@@ -89,21 +146,50 @@ export function OccasionalIntakeDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Pill className="h-4 w-4 text-emerald-600" />
-            Toma pontual
+            Adicionar Medicação
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Remédio tomado uma única vez (ex.: febre, dor de cabeça) — sem rotina, sem dias e sem
-            horários recorrentes. Aparece na grade de hoje.
+            Esporádica: toma única, vale para hoje. Recorrente: entra no controle do painel nos dias
+            escolhidos.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Alternador Esporádica / Recorrente */}
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-input bg-muted/40 p-1">
+            <button
+              type="button"
+              aria-pressed={mode === 'esporadica'}
+              onClick={() => setMode('esporadica')}
+              className={`flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors ${
+                mode === 'esporadica'
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Zap className="h-3.5 w-3.5" /> Esporádica
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'recorrente'}
+              onClick={() => setMode('recorrente')}
+              className={`flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium transition-colors ${
+                mode === 'recorrente'
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Repeat className="h-3.5 w-3.5" /> Recorrente
+            </button>
+          </div>
+
+          {/* Nome + buscador de princípio ativo */}
           <div className="space-y-1">
-            <Label htmlFor="once-med-name" className="text-xs">
-              Nome do remédio
+            <Label htmlFor="add-med-name" className="text-xs">
+              Nome da medicação
             </Label>
             <Input
-              id="once-med-name"
+              id="add-med-name"
               value={name}
               onChange={(e) => {
                 setName(e.target.value)
@@ -183,11 +269,11 @@ export function OccasionalIntakeDialog({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="once-med-ingredient" className="text-xs">
+            <Label htmlFor="add-med-ingredient" className="text-xs">
               Princípio ativo (opcional)
             </Label>
             <Input
-              id="once-med-ingredient"
+              id="add-med-ingredient"
               value={activeIngredient}
               onChange={(e) => setActiveIngredient(e.target.value)}
               placeholder="Ex.: dipirona sódica"
@@ -195,32 +281,97 @@ export function OccasionalIntakeDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Dose */}
+          <div className="space-y-1">
+            <Label htmlFor="add-med-dosage" className="text-xs">
+              Dose
+            </Label>
+            <Input
+              id="add-med-dosage"
+              value={dosage}
+              onChange={(e) => setDosage(e.target.value)}
+              placeholder="Ex.: 500 mg"
+              className="text-sm"
+            />
+          </div>
+
+          {mode === 'esporadica' ? (
             <div className="space-y-1">
-              <Label htmlFor="once-med-dosage" className="text-xs">
-                Dosagem
-              </Label>
-              <Input
-                id="once-med-dosage"
-                value={dosage}
-                onChange={(e) => setDosage(e.target.value)}
-                placeholder="Ex.: 500 mg"
-                className="text-sm"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="once-med-time" className="text-xs">
+              <Label htmlFor="add-med-time" className="text-xs">
                 Horário da toma
               </Label>
               <Input
-                id="once-med-time"
+                id="add-med-time"
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="text-sm w-full"
               />
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Dias da semana</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[0, 1, 2, 3, 4, 5, 6].map((d) => {
+                    const active = weekdays.includes(d)
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => toggleWeekday(d)}
+                        className={`h-8 w-10 rounded-md border text-xs font-medium transition-colors ${
+                          active
+                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            : 'bg-background border-input text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {weekdayLetter(d)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Horários das tomas
+                </Label>
+                {times.map((t, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={t}
+                      onChange={(e) => updateTime(i, e.target.value)}
+                      className="text-sm w-36"
+                      aria-label={`Horário ${i + 1}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                      disabled={times.length === 1}
+                      onClick={() => removeTime(i)}
+                      aria-label={`Remover horário ${i + 1}`}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-emerald-700"
+                  onClick={() => setTimes((prev) => [...prev, '08:00'])}
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Adicionar horário
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
@@ -234,7 +385,7 @@ export function OccasionalIntakeDialog({
             className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0"
           >
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Registrar toma
+            {mode === 'esporadica' ? 'Registrar' : 'Salvar medicação'}
           </Button>
         </DialogFooter>
       </DialogContent>
