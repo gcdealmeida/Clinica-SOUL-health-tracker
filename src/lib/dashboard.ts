@@ -465,6 +465,13 @@ export interface MedRow {
   times: string[] // horários informados no texto, ex: ["07:00"]
   /** doses tomadas por dia da semana, índice 0 = domingo */
   weekDoses: number[]
+  /**
+   * doses PLANEJADAS por dia da semana (rotina cadastrada), índice 0 = domingo.
+   * Presente nas linhas de rotina (daily/weekly): célula vermelha quando
+   * planejado e ainda não tomado, verde quando tomado. Ausente/zerado nas
+   * linhas pontuais ('once'), que só aparecem quando tomadas.
+   */
+  weekPlanned?: number[]
 }
 
 const WEEKDAY_LETTERS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']

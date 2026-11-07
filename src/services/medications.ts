@@ -80,6 +80,46 @@ export const medicationService = {
   },
 
   /**
+   * Registra a toma de HOJE de uma medicação recorrente (routine daily/weekly):
+   * grava health_metrics category 'remedio' com text_value = nome da medicação
+   * (sem notes "pontual" — assim conta como toma de rotina no pareamento por
+   * nome da grade, virando célula verde) e volta para a linha do tempo do dia.
+   * Sem digitação: só o id + horário (padrão = agora).
+   */
+  async registerIntake(medicationId: string, time?: string): Promise<Medication> {
+    const userId = pb.authStore.record?.id
+    if (!userId) throw new Error('Usuário não autenticado')
+
+    const meds = await this.list()
+    const med = meds.find((m) => m.id === medicationId)
+    if (!med || med.routine === 'once') {
+      throw new Error('Medicação recorrente não encontrada')
+    }
+
+    const hhmm = time?.trim()
+    if (hhmm && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) {
+      throw new Error('Horário inválido. Use o formato HH:MM')
+    }
+    const now = new Date()
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const hh =
+      hhmm ||
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+
+    const { healthService } = await import('@/services/health')
+    await healthService.createMetric({
+      category: 'remedio',
+      date_time: `${dateStr} ${hh}`,
+      text_value: med.name,
+      unit: 'dose',
+      notes: med.dosage?.trim() ? `rotina • ${med.dosage.trim()}` : 'rotina',
+      userId,
+    })
+
+    return med
+  },
+
+  /**
    * Registra uma toma PONTUAL (sem rotina): cria a medicação com routine 'once'
    * (reaproveitando a linha já existente com o mesmo nome, se houver) e grava a
    * toma como health_metrics category 'remedio' na data/hora informada.

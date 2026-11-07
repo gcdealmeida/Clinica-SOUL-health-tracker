@@ -8,6 +8,7 @@ import { medicalService } from '@/services/medical'
 import { medicationService, type Medication } from '@/services/medications'
 import { buildPlannedMedRows, buildOnceMedRows, buildOrphanOnceRows } from '@/lib/medicationRows'
 import { OccasionalIntakeDialog } from '@/components/OccasionalIntakeDialog'
+import { TakeIntakeDialog } from '@/components/TakeIntakeDialog'
 import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
 import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
@@ -54,6 +55,7 @@ export default function HomePage() {
   const [plannedMeds, setPlannedMeds] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
   const [onceOpen, setOnceOpen] = useState(false)
+  const [takeOpen, setTakeOpen] = useState(false)
 
   // Preferência de métricas (cards customizáveis)
   const [visibleCards, setVisibleCards] = useState<string[]>([])
@@ -108,7 +110,7 @@ export default function HomePage() {
   const remedyMetrics = useMemo(() => metrics.filter((m) => m.category === 'remedio'), [metrics])
   const medRows = useMemo(
     () => [
-      ...buildPlannedMedRows(plannedMeds),
+      ...buildPlannedMedRows(plannedMeds, remedyMetrics),
       ...buildOnceMedRows(plannedMeds, remedyMetrics),
       ...buildOrphanOnceRows(plannedMeds, remedyMetrics),
       ...buildMedRows(
@@ -404,16 +406,7 @@ export default function HomePage() {
                           </p>
                         </div>
                         {med.weekDoses.map((doses, i) => (
-                          <span
-                            key={i}
-                            className={`justify-self-center text-[10px] min-w-5 h-5 px-0.5 flex items-center justify-center rounded-full ${
-                              doses > 0
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
-                                : ''
-                            }`}
-                          >
-                            {doses > 0 ? `${doses}x` : ''}
-                          </span>
+                          <MedCell key={i} doses={doses} planned={med.weekPlanned?.[i] ?? 0} />
                         ))}
                       </div>
                     ))}
@@ -422,9 +415,10 @@ export default function HomePage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="text-xs flex-1"
-                      onClick={() => navigate('/registrar?category=remedio')}
+                      className="text-xs flex-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                      onClick={() => setTakeOpen(true)}
                     >
+                      <Pill className="h-3.5 w-3.5 mr-1" />
                       Tomei medicação
                     </Button>
                     <Button
@@ -565,12 +559,36 @@ export default function HomePage() {
         </Card>
 
         <OccasionalIntakeDialog open={onceOpen} onOpenChange={setOnceOpen} onSaved={loadAll} />
+        <TakeIntakeDialog open={takeOpen} onOpenChange={setTakeOpen} onSaved={loadAll} />
       </main>
     </div>
   )
 }
 
 // ---------- Sub-componentes ----------
+
+/**
+ * Célula da grade semanal de medicações:
+ * - verde = toma(s) já registrada(s) naquele dia ("1x", "2x"…)
+ * - vermelho = toma planejada (rotina diária/semanal) ainda não registrada
+ * - neutro = nenhum plano nem registro para o dia
+ */
+function MedCell({ doses, planned }: { doses: number; planned: number }) {
+  const taken = doses > 0
+  const isPlanned = planned > 0
+  if (!taken && !isPlanned) return <span className="justify-self-center" />
+
+  const cls = taken
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
+    : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 font-semibold'
+  return (
+    <span
+      className={`justify-self-center text-[10px] min-w-5 h-5 px-0.5 flex items-center justify-center rounded-full ${cls}`}
+    >
+      {`${taken ? doses : planned}x`}
+    </span>
+  )
+}
 
 function MetricCard({ data }: { data: MetricCardData }) {
   const Icon = data.def.icon

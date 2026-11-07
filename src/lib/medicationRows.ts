@@ -4,28 +4,13 @@ import type { Medication } from '@/services/medications'
 /**
  * Linhas da grade "Medicação Ingerida" a partir das medicações cadastradas em
  * /medicamentos. Cada dia da rotina (todos os dias na diária; dias escolhidos
- * na semanal) mostra a quantidade de tomas do horário cadastrado (ex.:
- * 2 horários → "2x"). Toma pontual (routine 'once') não gera linha planejada —
- * só aparece quando a toma é registrada, via buildOnceMedRows / buildOrphanOnceRows.
+ * na semanal) mostra a QUANTIDADE PLANEJADA de tomas dos horários cadastrados
+ * (ex.: 2 horários → "2x"); as tomas efetivamente REGISTRADAS (health_metrics
+ * category 'remedio' pareadas pelo nome) vêm em weekDoses — a célula fica
+ * verde quando tomou, vermelha quando planejado e ainda não tomou.
+ * Toma pontual (routine 'once') não gera linha planejada — só aparece quando
+ * a toma é registrada, via buildOnceMedRows / buildOrphanOnceRows.
  */
-export function buildPlannedMedRows(meds: Medication[]): MedRow[] {
-  return meds
-    .filter((m) => m.routine !== 'once')
-    .map((m) => {
-      const weekDoses = [0, 0, 0, 0, 0, 0, 0]
-      const days = m.routine === 'weekly' ? m.weekdays : [0, 1, 2, 3, 4, 5, 6]
-      for (const d of days) {
-        if (d >= 0 && d <= 6) weekDoses[d] = m.times.length
-      }
-      return {
-        id: m.id,
-        name: m.name,
-        dosage: m.dosage,
-        times: m.times,
-        weekDoses,
-      }
-    })
-}
 
 const weekdayOf = (date: string): number | null => {
   const day = (date || '').slice(0, 10)
@@ -49,6 +34,59 @@ const weekWindow = () => {
 const isPontual = (r: { notes?: string }) => (r.notes ?? '').toLowerCase().includes('pontual')
 
 /**
+ * Conta, por nome de remédio (minúsculas), as tomas registradas por dia da
+ * semana dentro da janela de 7 dias da grade.
+ * pontualOnly=true conta só tomas com notes "pontual" (toma esporádica);
+ * pontualOnly=false conta só as sem "pontual" (tomas de rotina, registradas
+ * pelo botão "Tomei hoje" ou manualmente).
+ */
+function countTakenByName(
+  remedyMetrics: Array<{ text_value?: string; notes?: string; date_time: string }>,
+  pontualOnly: boolean,
+): Map<string, number[]> {
+  const { weekAgoStr, todayStr: today } = weekWindow()
+  const byName = new Map<string, number[]>()
+  for (const r of remedyMetrics) {
+    if (isPontual(r) !== pontualOnly) continue
+    const day = (r.date_time || '').slice(0, 10)
+    if (day < weekAgoStr || day > today) continue
+    const label = (r.text_value ?? '').trim().toLowerCase()
+    if (!label) continue
+    const arr = byName.get(label) ?? [0, 0, 0, 0, 0, 0, 0]
+    const wd = weekdayOf(r.date_time)
+    if (wd !== null) arr[wd] += 1
+    byName.set(label, arr)
+  }
+  return byName
+}
+
+export function buildPlannedMedRows(
+  meds: Medication[],
+  remedyMetrics: Array<{ text_value?: string; notes?: string; date_time: string }> = [],
+): MedRow[] {
+  const takenByName = countTakenByName(remedyMetrics, false)
+
+  return meds
+    .filter((m) => m.routine !== 'once')
+    .map((m) => {
+      const weekPlanned = [0, 0, 0, 0, 0, 0, 0]
+      const days = m.routine === 'weekly' ? m.weekdays : [0, 1, 2, 3, 4, 5, 6]
+      for (const d of days) {
+        if (d >= 0 && d <= 6) weekPlanned[d] = m.times.length
+      }
+      const taken = takenByName.get(m.name.trim().toLowerCase()) ?? [0, 0, 0, 0, 0, 0, 0]
+      return {
+        id: m.id,
+        name: m.name,
+        dosage: m.dosage,
+        times: m.times,
+        weekDoses: taken,
+        weekPlanned,
+      }
+    })
+}
+
+/**
  * Linhas das tomas pontuais: para cada medicação routine 'once', soma as tomas
  * registradas (health_metrics category 'remedio' com notes "pontual") por dia,
  * dentro da janela de 7 dias da grade. Medicação 'once' sem nenhuma toma na
@@ -61,19 +99,7 @@ export function buildOnceMedRows(
   const onceMeds = meds.filter((m) => m.routine === 'once')
   if (onceMeds.length === 0) return []
 
-  const { weekAgoStr, todayStr } = weekWindow()
-  const dosesByName = new Map<string, number[]>()
-  for (const r of remedyMetrics) {
-    if (!isPontual(r)) continue
-    const day = (r.date_time || '').slice(0, 10)
-    if (day < weekAgoStr || day > todayStr) continue
-    const label = (r.text_value ?? '').trim().toLowerCase()
-    if (!label) continue
-    const arr = dosesByName.get(label) ?? [0, 0, 0, 0, 0, 0, 0]
-    const wd = weekdayOf(r.date_time)
-    if (wd !== null) arr[wd] += 1
-    dosesByName.set(label, arr)
-  }
+  const dosesByName = countTakenByName(remedyMetrics, true)
 
   return onceMeds
     .filter((m) => dosesByName.has(m.name.trim().toLowerCase()))
@@ -83,6 +109,7 @@ export function buildOnceMedRows(
       dosage: m.dosage,
       times: [],
       weekDoses: dosesByName.get(m.name.trim().toLowerCase()) ?? [0, 0, 0, 0, 0, 0, 0],
+      weekPlanned: [0, 0, 0, 0, 0, 0, 0],
     }))
 }
 
@@ -95,7 +122,7 @@ export function buildOrphanOnceRows(
   meds: Medication[],
   remedyMetrics: Array<{ id: string; text_value?: string; notes?: string; date_time: string }>,
 ): MedRow[] {
-  const { weekAgoStr, todayStr } = weekWindow()
+  const { weekAgoStr, todayStr: today } = weekWindow()
   const knownNames = new Set(meds.map((m) => m.name.trim().toLowerCase()))
   const out: MedRow[] = []
   const seen = new Set<string>()
@@ -103,7 +130,7 @@ export function buildOrphanOnceRows(
   for (const r of remedyMetrics) {
     if (!isPontual(r)) continue
     const day = (r.date_time || '').slice(0, 10)
-    if (day < weekAgoStr || day > todayStr) continue
+    if (day < weekAgoStr || day > today) continue
     const label = (r.text_value ?? '').trim()
     if (!label) continue
     const key = label.toLowerCase()
@@ -113,7 +140,14 @@ export function buildOrphanOnceRows(
     const weekDoses = [0, 0, 0, 0, 0, 0, 0]
     const wd = weekdayOf(r.date_time)
     if (wd !== null) weekDoses[wd] += 1
-    out.push({ id: `once-${r.id}`, name: label, dosage: '', times: [], weekDoses })
+    out.push({
+      id: `once-${r.id}`,
+      name: label,
+      dosage: '',
+      times: [],
+      weekDoses,
+      weekPlanned: [0, 0, 0, 0, 0, 0, 0],
+    })
   }
   return out
 }
