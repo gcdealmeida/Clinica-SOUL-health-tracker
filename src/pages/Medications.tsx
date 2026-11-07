@@ -29,8 +29,8 @@ export default function MedicationsPage() {
   const [weekdays, setWeekdays] = useState<number[]>([])
   const [times, setTimes] = useState<string[]>(['08:00'])
 
-  // Sugestões do OpenFDA
-  const { results, loading: searching, failed } = useActiveIngredientSearch(name)
+  // Sugestões de princípio ativo (base da ANVISA via backend, fallback OpenFDA)
+  const { results, loading: searching, failed, source } = useActiveIngredientSearch(name)
   const [showSuggestions, setShowSuggestions] = useState(false)
 
   useEffect(() => {
@@ -142,7 +142,7 @@ export default function MedicationsPage() {
               Nova medicação
             </CardTitle>
             <CardDescription className="text-xs">
-              O princípio ativo é buscado na base pública OpenFDA enquanto você digita o nome.
+              Sugestões de princípio ativo da base da ANVISA enquanto você digita o nome.
             </CardDescription>
           </CardHeader>
 
@@ -171,7 +171,9 @@ export default function MedicationsPage() {
                 {showSuggestions && results.length > 0 && (
                   <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-2">
                     <p className="text-xs font-medium text-emerald-800">
-                      Princípio ativo encontrado — confirme se estiver certo:
+                      {source === 'openfda'
+                        ? 'Princípio ativo encontrado na base internacional (FDA) — confirme:'
+                        : 'Princípio ativo encontrado — confirme se estiver certo:'}
                     </p>
                     {results.map((s) => (
                       <div
@@ -179,8 +181,11 @@ export default function MedicationsPage() {
                         className="flex items-center justify-between gap-2"
                       >
                         <div className="min-w-0">
-                          <p className="text-sm text-foreground truncate">{s.activeIngredient}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">{s.label}</p>
+                          <p className="text-sm text-foreground truncate">{s.label}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {s.category ? `${s.category} · ` : ''}
+                            {s.activeIngredient}
+                          </p>
                         </div>
                         <Button
                           type="button"

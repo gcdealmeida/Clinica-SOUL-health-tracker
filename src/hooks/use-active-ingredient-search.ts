@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { searchActiveIngredients, type IngredientSuggestion } from '@/lib/openfda'
+import { searchActiveIngredients, type IngredientSuggestion } from '@/lib/med-search'
 
 /**
- * Consulta o princípio ativo no OpenFDA enquanto o usuário digita o nome do remédio.
- * Debounce de 400ms; com menos de 3 letras não consulta. Falha não bloqueia o cadastro.
+ * Busca o princípio ativo enquanto o usuário digita o nome do remédio.
+ * Consulta o backend (dataset aberto da ANVISA, fallback OpenFDA) com debounce
+ * de 400ms; com menos de 3 letras não consulta. Falha não bloqueia o cadastro.
  */
 export function useActiveIngredientSearch(query: string) {
   const [results, setResults] = useState<IngredientSuggestion[]>([])
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [source, setSource] = useState('')
 
   useEffect(() => {
     const term = query.trim()
@@ -16,6 +18,7 @@ export function useActiveIngredientSearch(query: string) {
       setResults([])
       setLoading(false)
       setFailed(false)
+      setSource('')
       return
     }
 
@@ -26,10 +29,12 @@ export function useActiveIngredientSearch(query: string) {
         const list = await searchActiveIngredients(term, controller.signal)
         setResults(list)
         setFailed(false)
+        setSource(list[0]?.source ?? '')
       } catch (_) {
         if (controller.signal.aborted) return
         setResults([])
         setFailed(true)
+        setSource('')
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
@@ -41,5 +46,5 @@ export function useActiveIngredientSearch(query: string) {
     }
   }, [query])
 
-  return { results, loading, failed }
+  return { results, loading, failed, source }
 }
