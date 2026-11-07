@@ -317,70 +317,158 @@ routerAdd(
       '}'
 
     try {
-      // Tenta em cascata. Com FOTO, começa pelo alias "reasoning": os logs do
-      // gateway mostram que o modelo atrás do alias "fast" (gpt-oss-120b) não
-      // recebe a parte multimodal (responde sempre {"error":"NO_IMAGE_RECEIVED"}),
-      // então iniciar por ele só gasta uma tentativa perdida. Sem foto, só texto,
-      // o "fast" basta. O sentinel NO_IMAGE_RECEIVED continua como rede de
-      // segurança caso os aliases mudem no gateway.
-      const modelsToTry = photoDataUrl ? ['reasoning', 'fast'] : ['fast']
-      let parsed = null
-      let raw = ''
-      let modelUsed = ''
-      let imageNeverArrived = false
+      // Tenta em cascata de (modelo x formato da mensagem). O corpo de erro
+      // VAZIO do gateway (400 {"error":{}}) esconde a causa, então cada
+      // tentativa loga o erro completo (status, código, mensagem, tamanho do
+      // payload) e a cascata prova variações do formato multimodal:
+      //  - 'object-high': {image_url:{url, detail:'high'}} (formato atual)
+      //  - 'object':      {image_url:{url}} — sem detail (alguns modelos rejeitam o campo)
+      //  - 'string-url':  image_url como string pura (formato antigo do OpenAI Vision)
+      // Com FOTO, começa pelo alias "reasoning": o modelo atrás do alias "fast"
+      // (gpt-oss-120b) não recebe a parte multimodal (responde sempre
+      // {"error":"NO_IMAGE_RECEIVED"}), então só entra ao final como última
+      // tentativa. O sentinel NO_IMAGE_RECEIVED segue como rede de segurança.
+      const buildUserContent = (variant, imageUrl) => {
+        if (!photoDataUrl) return [{ type: 'text', text: textPart }]
+        const textMsg = { type: 'text', text: textPart }
+        if (variant === 'string-url') return [textMsg, { type: 'image_url', image_url: imageUrl }]
+        if (variant === 'object')
+          return [textMsg, { type: 'image_url', image_url: { url: imageUrl } }]
+        return [textMsg, { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } }]
+      }
 
-      for (let i = 0; i < modelsToTry.length; i++) {
-        const model = modelsToTry[i]
-        try {
-          const reply = $ai.chat({
-            model: model,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userContent },
-            ],
-          })
-          modelUsed = reply && reply.model ? String(reply.model) : model
-          raw =
-            reply.choices && reply.choices[0] && reply.choices[0].message
-              ? String(reply.choices[0].message.content || '')
-              : ''
-          console.log(
-            'analyze-meal: modelo ' +
-              modelUsed +
-              ' respondeu (' +
-              raw.length +
-              ' chars): ' +
-              raw.slice(0, 300),
-          )
-          parsed = extractMealJson(raw)
+      // Roda a cascata de tentativas para UMA imagem e devolve o melhor
+      // resultado: { parsed, raw, modelUsed, imageNeverArrived, lastErrSummary }.
+      const runLadder = (imageUrl) => {
+        const attempts = [
+          { model: 'reasoning', variant: 'object-high' },
+          { model: 'reasoning', variant: 'object' },
+          { model: 'reasoning', variant: 'string-url' },
+          { model: 'fast', variant: 'object' },
+          { model: 'fast', variant: 'string-url' },
+        ]
+        let parsed = null
+        let raw = ''
+        let modelUsed = ''
+        let imageNeverArrived = false
+        let lastErrSummary = ''
+        let lastErrDetail = ''
 
-          if (parsed && parsed.error && String(parsed.error).indexOf('NO_IMAGE_RECEIVED') !== -1) {
-            imageNeverArrived = true
-            parsed = null
+        for (let i = 0; i < attempts.length; i++) {
+          const attempt = attempts[i]
+          try {
+            const attemptContent = buildUserContent(attempt.variant, imageUrl)
+            const reply = $ai.chat({
+              model: attempt.model,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: attemptContent },
+              ],
+            })
+            modelUsed = reply && reply.model ? String(reply.model) : attempt.model
+            raw =
+              reply.choices && reply.choices[0] && reply.choices[0].message
+                ? String(reply.choices[0].message.content || '')
+                : ''
             console.log(
-              'analyze-meal: o modelo ' +
+              'analyze-meal: modelo ' +
                 modelUsed +
-                ' NÃO recebeu a imagem — tentando próximo modelo.',
+                ' respondeu (' +
+                raw.length +
+                ' chars): ' +
+                raw.slice(0, 300),
             )
-            continue
-          }
+            parsed = extractMealJson(raw)
 
-          if (isUsableMeal(parsed)) {
-            if (imageNeverArrived) {
-              // Um modelo anterior da cascata não recebeu a imagem, mas ESTE
-              // recebeu e respondeu com uma análise utilizável — a entrega
-              // funcionou. Limpa o flag para não descartar o sucesso.
+            if (
+              parsed &&
+              parsed.error &&
+              String(parsed.error).indexOf('NO_IMAGE_RECEIVED') !== -1
+            ) {
+              imageNeverArrived = true
+              parsed = null
               console.log(
                 'analyze-meal: o modelo ' +
                   modelUsed +
-                  ' recebeu a imagem e respondeu com sucesso (modelo anterior não a recebeu).',
+                  ' NÃO recebeu a imagem — tentando próxima tentativa da cascata.',
               )
-              imageNeverArrived = false
+              continue
             }
-            break
+
+            if (isUsableMeal(parsed)) {
+              if (imageNeverArrived) {
+                // Um modelo anterior da cascata não recebeu a imagem, mas ESTE
+                // recebeu e respondeu com uma análise utilizável — a entrega
+                // funcionou. Limpa o flag para não descartar o sucesso.
+                console.log(
+                  'analyze-meal: o modelo ' +
+                    modelUsed +
+                    ' recebeu a imagem e respondeu com sucesso (modelo anterior não a recebeu).',
+                )
+                imageNeverArrived = false
+              }
+              break
+            }
+          } catch (err) {
+            // Log completo do erro: o gateway responde 400 {"error":{}} vazio,
+            // então capturamos tudo que o SkipAiError expõe (status, código,
+            // mensagem crua) junto do tamanho do payload enviado.
+            const status = err && err.status !== undefined ? String(err.status) : '?'
+            const code = err && err.code ? String(err.code) : '?'
+            const payloadChars = imageUrl ? imageUrl.length + 1200 : textPart.length
+            const detail =
+              'status=' +
+              status +
+              ', code=' +
+              code +
+              ', payload=' +
+              payloadChars +
+              ' chars, model=' +
+              attempt.model +
+              ', variant=' +
+              attempt.variant +
+              ', err=' +
+              (err && typeof err.toString === 'function' ? err.toString() : String(err))
+            console.log('analyze-meal: erro no $ai.chat — ' + detail)
+            lastErrDetail = detail
+            lastErrSummary = 'gateway respondeu ' + status + (code !== '?' ? ' (' + code + ')' : '')
           }
-        } catch (err) {
-          console.log('analyze-meal: erro no $ai.chat (model=' + model + '): ' + err.message)
+        }
+        return {
+          parsed: parsed,
+          raw: raw,
+          modelUsed: modelUsed,
+          imageNeverArrived: imageNeverArrived,
+          lastErrSummary: lastErrSummary,
+          lastErrDetail: lastErrDetail,
+        }
+      }
+
+      let res = photoDataUrl ? runLadder(photoDataUrl) : runLadder('')
+      let parsed = res.parsed
+      let raw = res.raw
+      let modelUsed = res.modelUsed
+      let imageNeverArrived = res.imageNeverArrived
+      let lastErrSummary = res.lastErrSummary
+      let lastErrDetail = res.lastErrDetail
+
+      // Se TODAS as tentativas falharam com erro de GATEWAY (nenhum modelo
+      // chegou a responder) e temos foto, o único parâmetro que ainda não
+      // testamos é o TAMANHO da imagem: refaz a cascata inteira com uma
+      // imagem menor (768px de lado), como retry automático.
+      if (photoDataUrl && !parsed && !modelUsed && !imageNeverArrived) {
+        console.log(
+          'analyze-meal: todas as tentativas falharam no gateway — tentando com imagem menor (768px).',
+        )
+        const smallerDataUrl = resizeDataUrl(photoDataUrl, 768)
+        if (smallerDataUrl && smallerDataUrl.length < photoDataUrl.length) {
+          const retry = runLadder(smallerDataUrl)
+          parsed = retry.parsed
+          raw = retry.raw
+          modelUsed = retry.modelUsed
+          imageNeverArrived = retry.imageNeverArrived
+          lastErrSummary = retry.lastErrSummary
+          lastErrDetail = retry.lastErrDetail
         }
       }
 
@@ -393,11 +481,25 @@ routerAdd(
       // recebeu a imagem (parsed !== null aqui significa que o ÚLTIMO modelo
       // respondeu com erro utilizável de outro tipo, e a imagem chegou nele).
       if (parsed && parsed.error && String(parsed.error).indexOf('NO_IMAGE_RECEIVED') === -1) {
-        console.log('analyze-meal: a IA recusou a foto: ' + String(parsed.error))
+        // A IA respondeu com um erro dela: repassa o motivo REAL. Exceção:
+        // alegações de "foto sem nitidez/borrada" NUNCA ecoam ao usuário — a
+        // imagem foi validada e comprimida pelo app, então tratamos como
+        // falha de reconhecimento do modelo.
+        const modelErr = String(parsed.error)
+        console.log('analyze-meal: a IA recusou a foto: ' + modelErr)
+        const blurMatch = modelErr.toLowerCase().match(/nitid|borr|blur|resolu|nítid/)
+        if (blurMatch) {
+          return e.badRequestError(
+            'A IA não conseguiu reconhecer os alimentos nesta foto. Verifique se ela mostra o ' +
+              'prato completo com boa iluminação — ou descreva a refeição no campo de descrição.',
+          )
+        }
         return e.badRequestError(
-          'A IA não conseguiu identificar os alimentos desta foto. Tente refazê-la com boa ' +
-            'iluminação, prato centralizado e todos os alimentos visíveis — ou descreva a ' +
-            'refeição no campo de descrição.',
+          'A IA não conseguiu identificar os alimentos nesta foto. Motivo informado pelo ' +
+            'modelo: "' +
+            modelErr.slice(0, 200) +
+            '". Verifique se a foto mostra o prato completo com boa iluminação — ou ' +
+            'descreva a refeição no campo de descrição.',
         )
       }
 
@@ -411,16 +513,30 @@ routerAdd(
       }
 
       if (!isUsableMeal(parsed)) {
+        // Aqui cai quando a IA respondeu algo que não é um JSON utilizável
+        // (nem sentinel NO_IMAGE_RECEIVED, nem parsed.error) — ou quando o
+        // gateway rejeitou a requisição com 400 e nenhuma tentativa da cascata
+        // funcionou. Diz o motivo REAL: o que o modelo devolveu, ou o erro do
+        // gateway, em vez da mensagem genérica de "foto ruim".
         console.log(
           'analyze-meal: resposta da IA sem itens utilizáveis (model=' +
             modelUsed +
             '). Conteúdo bruto: ' +
             raw.slice(0, 400),
         )
+        let reason
+        if (lastErrDetail) {
+          reason = lastErrDetail
+        } else if (raw && raw.trim()) {
+          reason = 'o modelo respondeu fora do formato esperado: "' + raw.slice(0, 200) + '"'
+        } else {
+          reason = 'o modelo respondeu uma resposta vazia'
+        }
         return e.badRequestError(
-          'A IA não conseguiu identificar os alimentos desta foto. Tente refazer a foto ' +
-            'com boa iluminação, prato centralizado e todos os alimentos visíveis — ou ' +
-            'descreva a refeição no campo de descrição.',
+          'Não foi possível concluir a análise desta refeição. Motivo técnico: ' +
+            reason +
+            '. Tente refazer a foto com boa iluminação ou descreva a refeição no ' +
+            'campo de descrição.',
         )
       }
 
