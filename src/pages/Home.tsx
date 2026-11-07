@@ -354,7 +354,7 @@ export default function HomePage() {
               )}
               {medRows.length > 0 && (
                 <>
-                  <div className="grid grid-cols-[1fr_repeat(7,22px)] gap-y-1.5 items-center">
+                  <div className="grid grid-cols-[1fr_repeat(7,minmax(26px,1fr))] items-center">
                     <span />
                     {weekDays.map((d, i) => (
                       <span
@@ -366,8 +366,13 @@ export default function HomePage() {
                         {d.letter}
                       </span>
                     ))}
-                    {medRows.map((med) => (
-                      <div key={med.id} className="contents">
+                    {medRows.map((med, rowIdx) => (
+                      <div
+                        key={med.id}
+                        className={`col-span-8 grid grid-cols-subgrid items-center py-1.5 ${
+                          rowIdx > 0 ? 'border-t border-border/40' : ''
+                        }`}
+                      >
                         <div className="min-w-0">
                           <p className="text-xs font-medium truncate">{med.name}</p>
                           <p className="text-[10px] text-muted-foreground truncate">
@@ -379,13 +384,13 @@ export default function HomePage() {
                         {med.weekDoses.map((doses, i) => (
                           <span
                             key={i}
-                            className={`justify-self-center text-[10px] w-5 h-5 flex items-center justify-center rounded-full ${
+                            className={`justify-self-center text-[10px] min-w-5 h-5 px-0.5 flex items-center justify-center rounded-full ${
                               doses > 0
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
-                                : 'text-muted-foreground/50'
+                                : ''
                             }`}
                           >
-                            {doses > 0 ? `${doses}x` : '–'}
+                            {doses > 0 ? `${doses}x` : ''}
                           </span>
                         ))}
                       </div>

@@ -584,16 +584,23 @@ export function buildSymptomRows(metrics: HealthMetric[], days: 7 | 28 | 90): Sy
 
 // ---------- Grade semanal (S M T W T F S no formato local) ----------
 
+/**
+ * Últimos 7 dias (janela rolante terminando hoje), ordenados com domingo
+ * primeiro — as colunas da grade saem sempre na sequência D S T Q Q S S
+ * (Dom, Seg, Ter, Qua, Qui, Sex, Sáb), como no painel do Guava.
+ */
 export function lastWeekDays(): Array<{ date: string; letter: string; isToday: boolean }> {
   const letters = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
   const today = new Date()
-  const out: Array<{ date: string; letter: string; isToday: boolean }> = []
+  const days: Array<{ date: string; letter: string; isToday: boolean; weekday: number }> = []
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today.getTime() - i * 86400000)
     const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    out.push({ date: ds, letter: letters[d.getDay()], isToday: i === 0 })
+    days.push({ date: ds, letter: letters[d.getDay()], isToday: i === 0, weekday: d.getDay() })
   }
-  return out
+  return days
+    .sort((a, b) => a.weekday - b.weekday)
+    .map(({ date, letter, isToday }) => ({ date, letter, isToday }))
 }
 
 // ---------- Resumo da semana do diário emocional ----------
