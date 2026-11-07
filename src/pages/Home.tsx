@@ -9,6 +9,7 @@ import { medicationService, type Medication } from '@/services/medications'
 import { buildPlannedMedRows, buildOnceMedRows, buildOrphanOnceRows } from '@/lib/medicationRows'
 import { OccasionalIntakeDialog } from '@/components/OccasionalIntakeDialog'
 import { TakeIntakeDialog } from '@/components/TakeIntakeDialog'
+import { AllIntakesDialog } from '@/components/AllIntakesDialog'
 import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
 import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
@@ -56,6 +57,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [onceOpen, setOnceOpen] = useState(false)
   const [takeOpen, setTakeOpen] = useState(false)
+  const [allOpen, setAllOpen] = useState(false)
 
   // Preferência de métricas (cards customizáveis)
   const [visibleCards, setVisibleCards] = useState<string[]>([])
@@ -354,9 +356,13 @@ export default function HomePage() {
           <Card className="border-border/60">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Medicação Ingerida</CardTitle>
-              <Link to="/medicamentos" className="text-xs text-emerald-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => setAllOpen(true)}
+                className="text-xs text-emerald-600 hover:underline"
+              >
                 Todas
-              </Link>
+              </button>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
@@ -420,6 +426,14 @@ export default function HomePage() {
                     >
                       <Pill className="h-3.5 w-3.5 mr-1" />
                       Tomei medicação
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                      onClick={() => setAllOpen(true)}
+                    >
+                      Todas
                     </Button>
                   </div>
                 </>
@@ -552,6 +566,7 @@ export default function HomePage() {
 
         <OccasionalIntakeDialog open={onceOpen} onOpenChange={setOnceOpen} onSaved={loadAll} />
         <TakeIntakeDialog open={takeOpen} onOpenChange={setTakeOpen} onSaved={loadAll} />
+        <AllIntakesDialog open={allOpen} onOpenChange={setAllOpen} />
       </main>
     </div>
   )
