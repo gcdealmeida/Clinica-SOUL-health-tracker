@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Check, Clock, Info, Loader2, Pill, Plus, Repeat, Zap } from 'lucide-react'
+import { CalendarDays, Check, Clock, Info, Loader2, Pill, Plus, Repeat, Zap } from 'lucide-react'
 
 interface OccasionalIntakeDialogProps {
   open: boolean
@@ -29,13 +29,21 @@ const nowHHMM = () => {
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
 
+const todayDate = () => {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
 type MedMode = 'esporadica' | 'recorrente'
 
 /**
  * "Adicionar Medicação" no painel Hoje:
- * - Esporádica (padrão): toma pontual, só horário + Registrar — cria medicação
- *   routine 'once' (reutilizando a de mesmo nome) e grava a toma como
- *   health_metrics 'remedio' com notes "pontual".
+ * - Esporádica (padrão): toma pontual com DATA + horário — data editável, pode
+ *   ser retroativa (pré-preenchida com hoje). Cria medicação routine 'once'
+ *   (reutilizando a de mesmo nome) e grava a toma como health_metrics
+ *   'remedio' com notes "pontual".
  * - Recorrente: dias da semana (multi-seleção) + horário(s) — cria a medicação
  *   com rotina diária (todos os dias) ou semanal (dias escolhidos), para aparecer
  *   na grade semanal de controle do painel Hoje.
@@ -49,6 +57,7 @@ export function OccasionalIntakeDialog({
   const [mode, setMode] = useState<MedMode>('esporadica')
   const [name, setName] = useState('')
   const [dosage, setDosage] = useState('')
+  const [date, setDate] = useState(todayDate)
   const [time, setTime] = useState(nowHHMM())
   const [weekdays, setWeekdays] = useState<number[]>([])
   const [times, setTimes] = useState<string[]>(['08:00'])
@@ -64,6 +73,7 @@ export function OccasionalIntakeDialog({
       setMode('esporadica')
       setName('')
       setDosage('')
+      setDate(todayDate())
       setTime(nowHHMM())
       setWeekdays([])
       setTimes(['08:00'])
@@ -75,6 +85,7 @@ export function OccasionalIntakeDialog({
   const reset = () => {
     setName('')
     setDosage('')
+    setDate(todayDate())
     setTime(nowHHMM())
     setWeekdays([])
     setTimes(['08:00'])
@@ -94,14 +105,14 @@ export function OccasionalIntakeDialog({
   const canSave =
     name.trim().length > 0 &&
     (mode === 'esporadica'
-      ? TIME_RE.test(time.trim())
+      ? DATE_RE.test(date) && TIME_RE.test(time.trim())
       : weekdays.length > 0 && times.some((t) => TIME_RE.test(t.trim())))
 
   const handleSave = async () => {
     if (!canSave) {
       toast.error(
         mode === 'esporadica'
-          ? 'Informe o nome do remédio e um horário válido (HH:MM)'
+          ? 'Informe o nome do remédio, a data e um horário válido (HH:MM)'
           : 'Informe o nome, pelo menos um dia da semana e um horário válido (HH:MM)',
       )
       return
@@ -113,6 +124,7 @@ export function OccasionalIntakeDialog({
           name: name.trim(),
           active_ingredient: activeIngredient.trim(),
           dosage: dosage.trim(),
+          date: date.trim(),
           time: time.trim(),
         })
         toast.success('Toma pontual registrada')
@@ -149,8 +161,8 @@ export function OccasionalIntakeDialog({
             Adicionar Medicação
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Esporádica: toma única, vale para hoje. Recorrente: entra no controle do painel nos dias
-            escolhidos.
+            Esporádica: toma única, com data editável (pode ser retroativa). Recorrente: entra no
+            controle do painel nos dias escolhidos.
           </DialogDescription>
         </DialogHeader>
 
@@ -296,18 +308,33 @@ export function OccasionalIntakeDialog({
           </div>
 
           {mode === 'esporadica' ? (
-            <div className="space-y-1">
-              <Label htmlFor="add-med-time" className="text-xs">
-                Horário da toma
-              </Label>
-              <Input
-                id="add-med-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="text-sm w-full"
-              />
-            </div>
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="add-med-date" className="text-xs">
+                  <CalendarDays className="h-3.5 w-3.5 inline mr-1 -mt-0.5 text-emerald-600" />
+                  Data da toma
+                </Label>
+                <Input
+                  id="add-med-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="text-sm w-full"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="add-med-time" className="text-xs">
+                  Horário da toma
+                </Label>
+                <Input
+                  id="add-med-time"
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="text-sm w-full"
+                />
+              </div>
+            </>
           ) : (
             <>
               <div className="space-y-1.5">

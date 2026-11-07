@@ -32,6 +32,8 @@ export interface OccasionalIntakeInput {
   name: string
   active_ingredient?: string
   dosage?: string
+  /** "YYYY-MM-DD" da toma; omitido/vazio = hoje (pode ser retroativa) */
+  date?: string
   /** "HH:MM" da toma; omitido = agora */
   time?: string
 }
@@ -124,7 +126,8 @@ export const medicationService = {
   /**
    * Registra uma toma PONTUAL (sem rotina): cria a medicação com routine 'once'
    * (reaproveitando a linha já existente com o mesmo nome, se houver) e grava a
-   * toma como health_metrics category 'remedio' na data/hora informada.
+   * toma como health_metrics category 'remedio' na data/hora informada — a data
+   * pode ser retroativa (padrão = hoje).
    * A toma entra na grade semanal e na linha do tempo do painel Hoje.
    */
   async createOccasionalIntake(input: OccasionalIntakeInput): Promise<Medication> {
@@ -137,11 +140,16 @@ export const medicationService = {
     if (hhmm && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) {
       throw new Error('Horário inválido. Use o formato HH:MM')
     }
-    const today = new Date()
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const now = new Date()
+    const isoToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    // data da toma: a informada (retroativa ou hoje) ou hoje
+    const dateStr =
+      input.date?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(input.date.trim())
+        ? input.date.trim()
+        : isoToday
     const time =
       hhmm ||
-      `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`
+      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
     // reutiliza a medicação pontual já cadastrada com o mesmo nome
     const existing = (await this.list()).find(
