@@ -6,7 +6,8 @@ import { emotionalService } from '@/services/emotional'
 import { mealService } from '@/services/mealsAndAi'
 import { medicalService } from '@/services/medical'
 import { medicationService, type Medication } from '@/services/medications'
-import { buildPlannedMedRows } from '@/lib/medicationRows'
+import { buildPlannedMedRows, buildOnceMedRows, buildOrphanOnceRows } from '@/lib/medicationRows'
+import { OccasionalIntakeDialog } from '@/components/OccasionalIntakeDialog'
 import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
 import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
@@ -28,6 +29,7 @@ import {
   Coffee,
   ClipboardList,
   AlertTriangle,
+  Pill,
 } from 'lucide-react'
 import {
   buildMetricCards,
@@ -51,6 +53,7 @@ export default function HomePage() {
   const [medRecords, setMedRecords] = useState<MedicalRecord[]>([])
   const [plannedMeds, setPlannedMeds] = useState<Medication[]>([])
   const [loading, setLoading] = useState(true)
+  const [onceOpen, setOnceOpen] = useState(false)
 
   // Preferência de métricas (cards customizáveis)
   const [visibleCards, setVisibleCards] = useState<string[]>([])
@@ -102,15 +105,18 @@ export default function HomePage() {
       ),
     [metrics, meals, emotionalLogs, today],
   )
+  const remedyMetrics = useMemo(() => metrics.filter((m) => m.category === 'remedio'), [metrics])
   const medRows = useMemo(
     () => [
       ...buildPlannedMedRows(plannedMeds),
+      ...buildOnceMedRows(plannedMeds, remedyMetrics),
+      ...buildOrphanOnceRows(plannedMeds, remedyMetrics),
       ...buildMedRows(
         medRecords.filter((r) => r.type === 'medicamento_continuo'),
-        metrics.filter((m) => m.category === 'remedio'),
+        remedyMetrics,
       ),
     ],
-    [plannedMeds, medRecords, metrics],
+    [plannedMeds, medRecords, remedyMetrics],
   )
   const symptomRows = useMemo(
     () => buildSymptomRows(metrics, symptomWindow),
@@ -345,15 +351,24 @@ export default function HomePage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="border-border/60">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Medicações em uso</CardTitle>
+              <CardTitle className="text-sm">Medicação Ingerida</CardTitle>
               <Link to="/medicamentos" className="text-xs text-emerald-600 hover:underline">
                 Todas
               </Link>
             </CardHeader>
             <CardContent className="space-y-3">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                onClick={() => setOnceOpen(true)}
+              >
+                <Pill className="h-3.5 w-3.5 mr-1" />
+                Toma pontual (febre, dor de cabeça...)
+              </Button>
               {medRows.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Nenhum medicamento contínuo cadastrado.{' '}
+                  Nenhuma medicação registrada nesta semana.{' '}
                   <Link to="/medicamentos" className="text-emerald-600 hover:underline">
                     Cadastrar
                   </Link>
@@ -548,6 +563,8 @@ export default function HomePage() {
             )}
           </CardContent>
         </Card>
+
+        <OccasionalIntakeDialog open={onceOpen} onOpenChange={setOnceOpen} onSaved={loadAll} />
       </main>
     </div>
   )

@@ -83,21 +83,31 @@ export default function MedicationsPage() {
       return toast.error('Escolha pelo menos um dia da semana')
     }
     const cleanTimes = Array.from(new Set(times.map((t) => t.trim()))).filter(Boolean)
-    if (cleanTimes.length === 0) return toast.error('Informe pelo menos um horário de toma')
+    if (routine !== 'once' && cleanTimes.length === 0)
+      return toast.error('Informe pelo menos um horário de toma')
     if (!cleanTimes.every((t) => TIME_RE.test(t))) {
       return toast.error('Horário inválido. Use o formato HH:MM')
     }
 
     try {
       setSaving(true)
-      await medicationService.create({
-        name: cleanName,
-        active_ingredient: activeIngredient.trim(),
-        dosage: dosage.trim(),
-        routine,
-        weekdays: routine === 'weekly' ? weekdays : [],
-        times: cleanTimes.sort(),
-      })
+      if (routine === 'once') {
+        // toma pontual: sem dias e sem horários recorrentes
+        await medicationService.createOccasionalIntake({
+          name: cleanName,
+          active_ingredient: activeIngredient.trim(),
+          dosage: dosage.trim(),
+        })
+      } else {
+        await medicationService.create({
+          name: cleanName,
+          active_ingredient: activeIngredient.trim(),
+          dosage: dosage.trim(),
+          routine,
+          weekdays: routine === 'weekly' ? weekdays : [],
+          times: cleanTimes.sort(),
+        })
+      }
       toast.success('Medicação cadastrada')
       resetForm()
       await loadList()
@@ -120,8 +130,12 @@ export default function MedicationsPage() {
     }
   }
 
-  const routineLabel = (m: Medication) =>
-    m.routine === 'daily' ? 'Todos os dias' : m.weekdays.map((d) => WEEKDAY_NAMES[d]).join(', ')
+  const routineLabel = (m: Medication) => {
+    if (m.routine === 'once') return 'Toma pontual'
+    return m.routine === 'daily'
+      ? 'Todos os dias'
+      : m.weekdays.map((d) => WEEKDAY_NAMES[d]).join(', ')
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -129,9 +143,10 @@ export default function MedicationsPage() {
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Medicações em uso</h1>
+          <h1 className="text-2xl font-bold text-foreground">Medicação Ingerida</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Cadastre o remédio, a dosagem, a rotina e os horários. Ele aparece no painel Hoje.
+            Cadastre o remédio, a dosagem, a rotina e os horários — ou registre uma toma pontual
+            (sem rotina). Tudo aparece no painel Hoje.
           </p>
         </div>
 
@@ -263,6 +278,7 @@ export default function MedicationsPage() {
                   >
                     <option value="daily">Diária</option>
                     <option value="weekly">Semanal (escolher dias)</option>
+                    <option value="once">Toma pontual (sem rotina)</option>
                   </select>
                 </div>
               </div>
@@ -294,42 +310,44 @@ export default function MedicationsPage() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <Label className="text-xs flex items-center gap-1">
-                  <Clock className="h-3 w-3" /> Horários das tomas
-                </Label>
-                {times.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={t}
-                      onChange={(e) => updateTime(i, e.target.value)}
-                      className="text-sm w-36"
-                      aria-label={`Horário ${i + 1}`}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => removeTime(i)}
-                      disabled={times.length === 1}
-                      aria-label="Remover horário"
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8"
-                  onClick={() => setTimes((prev) => [...prev, '12:00'])}
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Adicionar horário
-                </Button>
-              </div>
+              {routine !== 'once' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> Horários das tomas
+                  </Label>
+                  {times.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={t}
+                        onChange={(e) => updateTime(i, e.target.value)}
+                        className="text-sm w-36"
+                        aria-label={`Horário ${i + 1}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => removeTime(i)}
+                        disabled={times.length === 1}
+                        aria-label="Remover horário"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-8"
+                    onClick={() => setTimes((prev) => [...prev, '12:00'])}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Adicionar horário
+                  </Button>
+                </div>
+              )}
 
               <div className="flex justify-end">
                 <Button

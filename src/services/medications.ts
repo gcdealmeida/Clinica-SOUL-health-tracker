@@ -1,11 +1,13 @@
 import pb from '@/lib/pocketbase/client'
 
 /**
- * Medicações em uso cadastradas pelo paciente (coleção `medications`).
- * routine: 'daily' = todos os dias; 'weekly' = dias escolhidos em `weekdays` (0 = domingo).
+ * Medicações cadastradas pelo paciente (coleção `medications`).
+ * routine: 'daily' = todos os dias; 'weekly' = dias escolhidos em `weekdays` (0 = domingo);
+ * 'once' = toma pontual (sem rotina) — dias e horários ficam vazios, a toma
+ * registrada é um health_metrics (category 'remedio') com notes "pontual HH:MM".
  */
 
-export type MedicationRoutine = 'daily' | 'weekly'
+export type MedicationRoutine = 'daily' | 'weekly' | 'once'
 
 export interface Medication {
   id: string
@@ -26,6 +28,14 @@ export interface MedicationInput {
   times: string[]
 }
 
+export interface OccasionalIntakeInput {
+  name: string
+  active_ingredient?: string
+  dosage?: string
+  /** "HH:MM" da toma; omitido = agora */
+  time?: string
+}
+
 const parseList = (raw: unknown): any[] => {
   if (Array.isArray(raw)) return raw
   if (typeof raw === 'string' && raw.trim()) {
@@ -44,7 +54,7 @@ const toMedication = (rec: any): Medication => ({
   name: rec.name ?? '',
   active_ingredient: rec.active_ingredient ?? '',
   dosage: rec.dosage ?? '',
-  routine: rec.routine === 'weekly' ? 'weekly' : 'daily',
+  routine: rec.routine === 'weekly' ? 'weekly' : rec.routine === 'once' ? 'once' : 'daily',
   weekdays: parseList(rec.weekdays).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
   times: parseList(rec.times).filter((t) => typeof t === 'string'),
 })
@@ -61,11 +71,61 @@ export const medicationService = {
     await pb.collection('medications').delete(id)
   },
 
-  /** Cria uma medicação para o usuário logado. */
+  /** Cria uma medicação (rotina diária/semanal) para o usuário logado. */
   async create(input: MedicationInput): Promise<Medication> {
     const userId = pb.authStore.record?.id
     if (!userId) throw new Error('Usuário não autenticado')
     const rec = await pb.collection('medications').create({ ...input, user: userId })
     return toMedication(rec)
+  },
+
+  /**
+   * Registra uma toma PONTUAL (sem rotina): cria a medicação com routine 'once'
+   * (reaproveitando a linha já existente com o mesmo nome, se houver) e grava a
+   * toma como health_metrics category 'remedio' na data/hora informada.
+   * A toma entra na grade semanal e na linha do tempo do painel Hoje.
+   */
+  async createOccasionalIntake(input: OccasionalIntakeInput): Promise<Medication> {
+    const userId = pb.authStore.record?.id
+    if (!userId) throw new Error('Usuário não autenticado')
+    const cleanName = input.name.trim()
+    if (!cleanName) throw new Error('Informe o nome do remédio')
+
+    const hhmm = input.time?.trim()
+    if (hhmm && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) {
+      throw new Error('Horário inválido. Use o formato HH:MM')
+    }
+    const today = new Date()
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const time =
+      hhmm ||
+      `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`
+
+    // reutiliza a medicação pontual já cadastrada com o mesmo nome
+    const existing = (await this.list()).find(
+      (m) => m.routine === 'once' && m.name.trim().toLowerCase() === cleanName.toLowerCase(),
+    )
+    const medication = existing
+      ? undefined
+      : await this.create({
+          name: cleanName,
+          active_ingredient: input.active_ingredient?.trim() ?? '',
+          dosage: input.dosage?.trim() ?? '',
+          routine: 'once',
+          weekdays: [],
+          times: [],
+        })
+
+    const { healthService } = await import('@/services/health')
+    await healthService.createMetric({
+      category: 'remedio',
+      date_time: `${dateStr} ${time}`,
+      text_value: cleanName,
+      unit: 'dose',
+      notes: `pontual${input.dosage?.trim() ? ` • ${input.dosage.trim()}` : ''}`,
+      userId,
+    })
+
+    return medication ?? existing!
   },
 }

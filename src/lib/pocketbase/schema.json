@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-07T21:42:34.618Z",
+  "generatedAt": "2026-11-07T22:05:29.668Z",
   "collections": [
     {
       "name": "users",
@@ -683,7 +683,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["daily", "weekly"]
+          "selectValues": ["daily", "weekly", "once"]
         },
         {
           "name": "weekdays",
