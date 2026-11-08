@@ -591,3 +591,33 @@ routerAdd(
   },
   $apis.requireAuth(),
 )
+
+// 3. Endpoint: POST /backend/v1/ai/test-doc
+routerAdd(
+  'POST',
+  '/backend/v1/ai/test-doc',
+  (e) => {
+    let result = { hasDocuments: typeof $documents !== 'undefined' }
+    try {
+      const exam = $app.findRecordById('exams', 'i60341rul7xdu1s')
+      result.examFound = true
+      result.title = exam.getString('title')
+      result.file = exam.getString('file')
+
+      if (typeof $documents !== 'undefined' && $documents.toMarkdown) {
+        const doc = $documents.toMarkdown({
+          collection: 'exams',
+          record: 'i60341rul7xdu1s',
+          file: exam.getString('file'),
+        })
+        result.docSuccess = true
+        result.markdownLength = doc && doc.markdown ? doc.markdown.length : 0
+        result.markdownSample = doc && doc.markdown ? doc.markdown.slice(0, 500) : ''
+      }
+    } catch (err) {
+      result.error = err.message
+    }
+    return e.json(200, result)
+  },
+  $apis.requireAuth(),
+)
