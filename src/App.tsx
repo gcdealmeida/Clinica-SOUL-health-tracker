@@ -15,6 +15,7 @@ import MealsPage from '@/pages/Meals'
 import MedicationsPage from '@/pages/Medications'
 import EmotionalDiaryPage from '@/pages/EmotionalDiary'
 import AiAnalysesPage from '@/pages/AiAnalyses'
+import MetricDetailPage from '@/pages/MetricDetail'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
 import NotFound from '@/pages/NotFound'
 
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="/refeicoes" element={<MealsPage />} />
               <Route path="/diario-emocional" element={<EmotionalDiaryPage />} />
               <Route path="/analises" element={<AiAnalysesPage />} />
+              <Route path="/metrics/:tipo" element={<MetricDetailPage />} />
             </Route>
 
             {/* Rota exclusiva para profissionais da Clínica Soul */}

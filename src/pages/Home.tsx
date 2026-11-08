@@ -640,8 +640,14 @@ function MedCell({
 
 function MetricCard({ data }: { data: MetricCardData }) {
   const Icon = data.def.icon
+  const navigate = useNavigate()
   return (
-    <div className="rounded-xl border bg-card p-3 hover:shadow-sm transition-shadow">
+    <button
+      type="button"
+      onClick={() => navigate(`/metrics/${data.def.id}`)}
+      className="rounded-xl border bg-card p-3 text-left hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer w-full"
+      aria-label={`Abrir painel de ${data.def.name}`}
+    >
       <div className="flex items-center gap-1.5 mb-1">
         {Icon ? (
           <span
@@ -659,7 +665,7 @@ function MetricCard({ data }: { data: MetricCardData }) {
         <span className="text-[10px] text-muted-foreground">{data.def.unit}</span>
       </div>
       <p className="text-[10px] text-muted-foreground mt-0.5">{data.when}</p>
-    </div>
+    </button>
   )
 }
 
