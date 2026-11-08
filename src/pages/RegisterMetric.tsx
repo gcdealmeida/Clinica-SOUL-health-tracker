@@ -187,6 +187,8 @@ export default function RegisterMetricPage() {
     return `${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   })
   const [numericValue, setNumericValue] = useState<string>('')
+  const [bodyFat, setBodyFat] = useState<string>('')
+  const [leanMass, setLeanMass] = useState<string>('')
   const [textValue, setTextValue] = useState<string>('')
   const [severity, setSeverity] = useState<string>('5')
   const [notes, setNotes] = useState<string>('')
@@ -242,10 +244,20 @@ export default function RegisterMetricPage() {
         unit: currentDef.defaultUnit,
         notes: notes || undefined,
         attachment: fileAttachment || undefined,
+        body_fat_pct:
+          selectedCategory === 'peso' && bodyFat
+            ? parseFloat(bodyFat.replace(',', '.'))
+            : undefined,
+        lean_mass_kg:
+          selectedCategory === 'peso' && leanMass
+            ? parseFloat(leanMass.replace(',', '.'))
+            : undefined,
       })
 
       toast.success(`${currentDef.name} registrado com sucesso!`)
       setNumericValue('')
+      setBodyFat('')
+      setLeanMass('')
       setTextValue('')
       setSeverity('5')
       setNotes('')
@@ -432,6 +444,43 @@ export default function RegisterMetricPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Peso: gordura corporal e massa magra opcionais (alimentam as abas do painel) */}
+                {currentDef.id === 'peso' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="body-fat" className="text-xs">
+                        Gordura corporal (%) — opcional
+                      </Label>
+                      <Input
+                        id="body-fat"
+                        type="number"
+                        step="any"
+                        min="0"
+                        max="100"
+                        placeholder="Ex: 24.5"
+                        value={bodyFat}
+                        onChange={(e) => setBodyFat(e.target.value)}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="lean-mass" className="text-xs">
+                        Massa magra (kg) — opcional
+                      </Label>
+                      <Input
+                        id="lean-mass"
+                        type="number"
+                        step="any"
+                        min="0"
+                        placeholder="Ex: 58.3"
+                        value={leanMass}
+                        onChange={(e) => setLeanMass(e.target.value)}
+                        className="text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Observações */}
                 <div className="space-y-1.5">

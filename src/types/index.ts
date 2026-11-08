@@ -38,6 +38,8 @@ export interface HealthMetric {
   unit?: string
   notes?: string
   attachment?: string
+  body_fat_pct?: number // % de gordura corporal (registros de peso)
+  lean_mass_kg?: number // massa magra em kg (registros de peso)
   created: string
   updated: string
 }

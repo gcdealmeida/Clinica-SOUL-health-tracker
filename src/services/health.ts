@@ -31,6 +31,8 @@ export const healthService = {
       unit: r.unit,
       notes: r.notes,
       attachment: r.attachment ? pb.files.getURL(r, r.attachment) : undefined,
+      body_fat_pct: r.body_fat_pct,
+      lean_mass_kg: r.lean_mass_kg,
       created: r.created,
       updated: r.updated,
     }))
@@ -45,6 +47,8 @@ export const healthService = {
     notes?: string
     attachment?: File
     userId?: string
+    body_fat_pct?: number
+    lean_mass_kg?: number
   }): Promise<HealthMetric> {
     const current = pb.authStore.record
     const user = data.userId || current?.id
@@ -61,6 +65,12 @@ export const healthService = {
     if (data.unit) formData.append('unit', data.unit)
     if (data.notes) formData.append('notes', data.notes)
     if (data.attachment) formData.append('attachment', data.attachment)
+    if (data.body_fat_pct !== undefined && !isNaN(data.body_fat_pct)) {
+      formData.append('body_fat_pct', String(data.body_fat_pct))
+    }
+    if (data.lean_mass_kg !== undefined && !isNaN(data.lean_mass_kg)) {
+      formData.append('lean_mass_kg', String(data.lean_mass_kg))
+    }
 
     const r = await pb.collection('health_metrics').create(formData)
 
@@ -74,6 +84,8 @@ export const healthService = {
       unit: r.unit,
       notes: r.notes,
       attachment: r.attachment ? pb.files.getURL(r, r.attachment) : undefined,
+      body_fat_pct: r.body_fat_pct,
+      lean_mass_kg: r.lean_mass_kg,
       created: r.created,
       updated: r.updated,
     }

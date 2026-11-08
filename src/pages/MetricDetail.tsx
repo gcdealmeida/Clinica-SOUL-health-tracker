@@ -21,6 +21,7 @@ import {
   Sparkles,
   Plus,
   CalendarDays,
+  Ruler,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -41,17 +42,45 @@ import { todayStr } from '@/lib/dashboard'
 import {
   PERIOD_OPTIONS,
   PeriodId,
+  MetricMeta,
   metricMeta,
   findCardDef,
   buildSeries,
   buildDualSeries,
   computeStats,
-  weekdayAverages,
-  yearlyTotals,
   recordValues,
   dayKey,
   formatValue as fmtVal,
 } from '@/lib/metricDetail'
+import {
+  ReferenceNote,
+  referenceNoteFor,
+  lashClassify,
+  bmiClassify,
+  bmiFrom,
+  goalFor,
+  refLinesFor,
+  computeAllTimeStats,
+  AllTimeStats,
+  weekdayStats,
+  WeekdayStat,
+  yearStats,
+  YearStat,
+  hourStats,
+  HourStat,
+  bodyFatSeries,
+  leanMassSeries,
+  hasBodyFatData,
+  hasLeanMassData,
+  latestBloodPressure,
+} from '@/lib/metricReference'
+import {
+  ReferenceNoteBlock,
+  AllTimeStatsBlock,
+  WeekdayStatsBlock,
+  YearStatsBlock,
+  HourStatsBlock,
+} from '@/components/metric/MetricStatsBlocks'
 
 const ICONS: Record<string, any> = {
   agua: Droplets,
@@ -70,6 +99,8 @@ const ICONS: Record<string, any> = {
   sintoma: CalendarDays,
   outro: CalendarDays,
 }
+
+type WeightTab = 'peso' | 'gordura' | 'magra'
 
 const periodLabel = (id: PeriodId) =>
   PERIOD_OPTIONS.find((p) => p.id === id)?.label.toLowerCase() ?? ''
@@ -97,14 +128,13 @@ function relativeWhen(dateStr?: string): string {
   return days === 1 ? 'ontem' : `${days}d atrás`
 }
 
-function tickEvery(len: number): number {
-  if (len <= 8) return 1
-  if (len <= 14) return 2
-  if (len <= 30) return 5
-  return Math.ceil(len / 8)
+function dayKeyOffset(today: string, offset: number): string {
+  const d = new Date(`${today}T00:00:00`)
+  d.setDate(d.getDate() + offset)
+  return d.toISOString().slice(0, 10)
 }
 
-// ---------- Gráficos ----------
+// ---------- Gráfico principal (com linhas de referência) ----------
 
 function MainChart({
   defId,
@@ -123,26 +153,58 @@ function MainChart({
   series: Array<{ label: string; value: number | null }>
   dualSeries: Array<{ label: string; sys: number | null; dia: number | null }>
 }) {
+  const refLines = refLinesFor(defId)
   const hasDual = chart === 'dualLine'
+  const grid = <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+  const xAxis = (
+    <XAxis
+      dataKey="label"
+      tick={{ fontSize: 10 }}
+      interval="preserveStartEnd"
+      minTickGap={18}
+      tickLine={false}
+      axisLine={false}
+    />
+  )
+  const yAxis = (domain?: [number, number]) => (
+    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} domain={domain} />
+  )
+  const tooltipBars = (
+    <ReTooltip
+      formatter={(v: any) => [`${fmtVal(defId, Number(v))} ${unit}`, 'Total']}
+      labelFormatter={(l) => String(l)}
+    />
+  )
+  const tooltipLine = (
+    <ReTooltip
+      formatter={(v: any) => [`${fmtVal(defId, Number(v))} ${unit}`, 'Valor']}
+      labelFormatter={(l) => String(l)}
+    />
+  )
+  const tooltipDual = (
+    <ReTooltip
+      formatter={(v: any, name: any) => [`${v} mmHg`, name === 'sys' ? 'Sistólica' : 'Diastólica']}
+      labelFormatter={(l) => String(l)}
+    />
+  )
 
   if (chart === 'bars') {
     return (
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={series} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 10 }}
-            interval="preserveStartEnd"
-            minTickGap={18}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} />
-          <ReTooltip
-            formatter={(v: any) => [`${fmtVal(defId, Number(v))} ${unit}`, 'Total']}
-            labelFormatter={(l) => String(l)}
-          />
+          {grid}
+          {xAxis}
+          {yAxis()}
+          {tooltipBars}
+          {refLines.map((rl) => (
+            <ReferenceLine
+              key={rl.value}
+              y={rl.value}
+              stroke={rl.color ?? '#94a3b8'}
+              strokeDasharray={rl.dashed ? '4 3' : undefined}
+              label={{ value: rl.label, position: 'insideTopRight', fontSize: 9, fill: rl.color }}
+            />
+          ))}
           <Bar dataKey="value" fill={fill} radius={[3, 3, 0, 0]} maxBarSize={22} />
         </BarChart>
       </ResponsiveContainer>
@@ -153,36 +215,26 @@ function MainChart({
     return (
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={dualSeries} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 10 }}
-            interval="preserveStartEnd"
-            minTickGap={18}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            width={42}
-            domain={[50, 160]}
-          />
-          <ReTooltip
-            formatter={(v: any, name: any) => [
-              `${v} mmHg`,
-              name === 'sys' ? 'Sistólica' : 'Diastólica',
-            ]}
-            labelFormatter={(l) => String(l)}
-          />
+          {grid}
+          {xAxis}
+          {yAxis([40, 170])}
+          {tooltipDual}
+          {refLines.map((rl) => (
+            <ReferenceLine
+              key={rl.value}
+              y={rl.value}
+              stroke={rl.color ?? '#94a3b8'}
+              strokeDasharray={rl.dashed ? '4 3' : undefined}
+              label={{ value: rl.label, position: 'insideTopRight', fontSize: 9, fill: rl.color }}
+            />
+          ))}
           <Line
             type="monotone"
             dataKey="sys"
             name="sys"
             stroke={stroke}
             strokeWidth={2}
-            dot={false}
+            dot={{ r: 2 }}
             connectNulls
           />
           <Line
@@ -192,7 +244,7 @@ function MainChart({
             stroke={stroke}
             strokeWidth={2}
             strokeDasharray="4 3"
-            dot={false}
+            dot={{ r: 2 }}
             connectNulls
           />
         </LineChart>
@@ -209,20 +261,19 @@ function MainChart({
             <stop offset="100%" stopColor={fill} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10 }}
-          interval="preserveStartEnd"
-          minTickGap={18}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} />
-        <ReTooltip
-          formatter={(v: any) => [`${fmtVal(defId, Number(v))} ${unit}`, 'Valor']}
-          labelFormatter={(l) => String(l)}
-        />
+        {grid}
+        {xAxis}
+        {yAxis()}
+        {tooltipLine}
+        {refLines.map((rl) => (
+          <ReferenceLine
+            key={rl.value}
+            y={rl.value}
+            stroke={rl.color ?? '#94a3b8'}
+            strokeDasharray={rl.dashed ? '4 3' : undefined}
+            label={{ value: rl.label, position: 'insideTopRight', fontSize: 9, fill: rl.color }}
+          />
+        ))}
         <Area
           type="monotone"
           dataKey="value"
@@ -238,32 +289,63 @@ function MainChart({
   )
 }
 
-// ---------- Blocos auxiliares ----------
+// ---------- Gráfico de aba do peso (gordura / massa magra) ----------
 
-function StatsCard({
-  title,
-  main,
+function SimpleLineChart({
+  data,
+  color,
   unit,
-  sub,
-  accent,
 }: {
-  title: string
-  main: string
-  unit?: string
-  sub?: string
-  accent: string
+  data: Array<{ label: string; value: number | null }>
+  color: string
+  unit: string
 }) {
+  if (!data.length) {
+    return (
+      <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground text-center px-6">
+        Sem registros com esse dado ainda. Ao registrar o peso, informe a gordura corporal (%) e a
+        massa magra (kg) — opcionais — para acompanhar aqui.
+      </div>
+    )
+  }
   return (
-    <Card>
-      <CardContent className="p-4 space-y-1">
-        <p className="text-[11px] font-medium text-muted-foreground">{title}</p>
-        <div className="flex items-baseline gap-1.5">
-          <span className={`text-lg font-bold ${accent}`}>{main}</span>
-          {unit && <span className="text-[11px] text-muted-foreground">{unit}</span>}
-        </div>
-        {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
-      </CardContent>
-    </Card>
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+        <defs>
+          <linearGradient id="weightTabFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: 10 }}
+          interval="preserveStartEnd"
+          minTickGap={18}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} />
+        <ReTooltip
+          formatter={(v: any) => [
+            `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${unit}`,
+            'Valor',
+          ]}
+          labelFormatter={(l) => fmtDay(String(l))}
+        />
+        <Area
+          type="monotone"
+          dataKey="value"
+          stroke={color}
+          strokeWidth={2}
+          fill="url(#weightTabFill)"
+          dot={{ r: 2 }}
+          activeDot={{ r: 4 }}
+          connectNulls
+        />
+      </AreaChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -287,6 +369,8 @@ function EmptyState({ defId, onRegister }: { defId: string; onRegister: () => vo
   )
 }
 
+// ---------- Página ----------
+
 export default function MetricDetailPage() {
   const { tipo = '' } = useParams()
   const navigate = useNavigate()
@@ -295,19 +379,58 @@ export default function MetricDetailPage() {
   const [metrics, setMetrics] = useState<HealthMetric[]>([])
   const [loading, setLoading] = useState(true)
   const [periodId, setPeriodId] = useState<PeriodId>('2s')
+  const [weightTab, setWeightTab] = useState<WeightTab>('peso')
+  const [heightCm, setHeightCm] = useState<number | undefined>(undefined)
+  const [heightDraft, setHeightDraft] = useState<string>('')
+  const [savingHeight, setSavingHeight] = useState(false)
 
   const def = useMemo(() => findCardDef(tipo), [tipo])
-  const meta = useMemo(() => (def ? metricMeta(def) : null), [def])
+  const meta: MetricMeta | null = useMemo(() => (def ? metricMeta(def) : null), [def])
+  const note: ReferenceNote | null = useMemo(() => (def ? referenceNoteFor(def.id) : null), [def])
+  const goal = useMemo(() => (def ? goalFor(def.id) : null), [def])
+  const isPressao = def?.categories[0] === 'pressao'
+  const isPeso = def?.categories[0] === 'peso'
+  const hasHourStats = !!meta?.dailySum
 
   useEffect(() => {
     if (!user || !def) return
+    let cancelled = false
     setLoading(true)
-    healthService
-      .listUserMetrics(undefined, 500, def.categories[0] as HealthCategory)
-      .then((list) => setMetrics(list))
+    Promise.all([
+      healthService.listUserMetrics(undefined, 500, def.categories[0] as HealthCategory),
+      import('@/services/preferences').then((m) => m.loadDashboardPreferences()),
+    ])
+      .then(([list, prefs]) => {
+        if (cancelled) return
+        setMetrics(list)
+        setHeightCm(prefs.heightCm)
+        setHeightDraft(prefs.heightCm ? String(prefs.heightCm) : '')
+      })
       .catch(() => toast.error('Não foi possível carregar os registros da métrica'))
-      .finally(() => setLoading(false))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
   }, [user, def])
+
+  const saveHeight = async () => {
+    const h = parseFloat(heightDraft.replace(',', '.'))
+    if (!h || h < 50 || h > 260) {
+      toast.error('Informe uma altura válida (50–260 cm)')
+      return
+    }
+    setSavingHeight(true)
+    try {
+      const { saveDashboardPreferences } = await import('@/services/preferences')
+      await saveDashboardPreferences({ metrics: [], heightCm: h })
+      setHeightCm(h)
+      toast.success('Altura salva — IMC atualizado')
+    } catch (_) {
+      toast.error('Não foi possível salvar a altura')
+    } finally {
+      setSavingHeight(false)
+    }
+  }
 
   const period = PERIOD_OPTIONS.find((p) => p.id === periodId)!
 
@@ -318,8 +441,8 @@ export default function MetricDetailPage() {
     return metrics.filter((m) => dayKey(m.date_time) >= start)
   }, [metrics, period, def])
 
-  const allTime = useMemo(
-    () => (def && meta ? computeStats(metrics, meta) : null),
+  const allTime: AllTimeStats | null = useMemo(
+    () => (def && meta ? computeAllTimeStats(metrics, meta) : null),
     [metrics, meta, def],
   )
   const rangeStats = useMemo(
@@ -332,22 +455,22 @@ export default function MetricDetailPage() {
     [inWindow, period, def],
   )
   const dualSeries = useMemo(
-    () =>
-      def?.categories[0] === 'pressao'
-        ? buildDualSeries(inWindow, period).map((p) => ({ ...p, value: p.sys }))
-        : [],
-    [inWindow, period, def],
+    () => (isPressao ? buildDualSeries(inWindow, period) : []),
+    [inWindow, period, isPressao],
   )
-  const weekdays = useMemo(
-    () => (def && meta ? weekdayAverages(metrics, meta) : []),
+  const weekdays: WeekdayStat[] = useMemo(
+    () => (def && meta ? weekdayStats(metrics, meta) : []),
     [metrics, meta, def],
   )
-  const perYear = useMemo(
-    () => (def && meta ? yearlyTotals(metrics, meta) : []),
+  const perYear: YearStat[] = useMemo(
+    () => (def && meta ? yearStats(metrics, meta) : []),
+    [metrics, meta, def],
+  )
+  const perHour: HourStat[] = useMemo(
+    () => (def && meta ? hourStats(metrics, meta) : []),
     [metrics, meta, def],
   )
 
-  const isDual = def?.categories[0] === 'pressao'
   const current = metrics[0] // lista vem ordenada por -date_time
   const latestDay = current ? dayKey(current.date_time) : null
 
@@ -364,6 +487,28 @@ export default function MetricDetailPage() {
     const vals = last ? recordValues(last) : []
     return vals.length ? vals[0] : null
   }, [metrics, def, meta])
+
+  // Pressão: par atual + selo LASH
+  const bp = useMemo(() => (isPressao ? latestBloodPressure(metrics) : null), [isPressao, metrics])
+  const bpClass = useMemo(() => (bp ? lashClassify(bp.sys, bp.dia) : null), [bp])
+
+  // Peso: IMC + séries das abas
+  const lastWeight = useMemo(
+    () => metrics.find((m) => m.numeric_value && m.numeric_value > 0)?.numeric_value ?? null,
+    [metrics],
+  )
+  const bmi = useMemo(
+    () => (lastWeight && heightCm ? bmiFrom(lastWeight, heightCm) : null),
+    [lastWeight, heightCm],
+  )
+  const bmiClass = useMemo(() => (bmi ? bmiClassify(bmi) : null), [bmi])
+  const fatSeries = useMemo(() => (isPeso ? bodyFatSeries(metrics) : []), [isPeso, metrics])
+  const leanSeries = useMemo(() => (isPeso ? leanMassSeries(metrics) : []), [isPeso, metrics])
+  const rangeFat = useMemo(() => {
+    const vals = fatSeries.map((p) => p.value).filter((v): v is number => v !== null)
+    if (!vals.length) return null
+    return { min: Math.min(...vals), max: Math.max(...vals) }
+  }, [fatSeries])
 
   const hasData =
     metrics.length > 0 && (currentVal !== null || metrics.some((m) => recordValues(m).length > 0))
@@ -428,18 +573,54 @@ export default function MetricDetailPage() {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-[11px] text-muted-foreground">
-                  {meta.dailySum ? 'Hoje' : 'Registro mais recente'}
+                  {meta.dailySum ? 'Total de hoje' : 'Registro mais recente'}
                 </p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className={`text-3xl font-bold ${def.colorClass}`}>{fmt(currentVal)}</span>
-                  <span className="text-xs text-muted-foreground">{meta.unit}</span>
-                </div>
+                {isPressao && bp ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-3xl font-bold text-rose-600">
+                      {bp.sys}/{bp.dia}
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
+                      style={{ backgroundColor: bpClass?.color }}
+                    >
+                      {bpClass?.label}
+                    </span>
+                  </div>
+                ) : isPeso ? (
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-3xl font-bold text-slate-600">{fmt(currentVal)}</span>
+                    <span className="text-xs text-muted-foreground">{meta.unit}</span>
+                    {bmi !== null && (
+                      <span
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white"
+                        style={{ backgroundColor: bmiClass?.color }}
+                      >
+                        IMC {bmi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} •{' '}
+                        {bmiClass?.label}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-3xl font-bold ${def.colorClass}`}>
+                      {fmt(currentVal)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{meta.unit}</span>
+                  </div>
+                )}
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {latestDay ? `Último registro: ${fmtDayLong(latestDay)}` : 'Sem registros'}
+                  {latestDay
+                    ? `${latestDay === todayStr() ? 'hoje' : fmtDayLong(latestDay)} • registro manual no app • ${relativeWhen(current?.date_time)}`
+                    : 'Sem registros'}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Fonte: registro manual no app • atualizado {relativeWhen(current?.date_time)}
-                </p>
+                {isPeso && rangeFat && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Gordura corporal:{' '}
+                    {rangeFat.min.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}–
+                    {rangeFat.max.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%
+                  </p>
+                )}
               </div>
               {/* Seletor de período */}
               <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1 flex-wrap">
@@ -460,6 +641,32 @@ export default function MetricDetailPage() {
               </div>
             </div>
 
+            {/* Abas do peso: Peso / Gordura % / Massa Magra */}
+            {isPeso && (
+              <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1 w-fit">
+                {(
+                  [
+                    ['peso', 'Peso'],
+                    ['gordura', 'Gordura %'],
+                    ['magra', 'Massa Magra'],
+                  ] as Array<[WeightTab, string]>
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setWeightTab(id)}
+                    className={`text-[11px] px-3 py-1 rounded-full transition-colors ${
+                      weightTab === id
+                        ? 'bg-slate-600 text-white font-semibold'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Gráfico principal */}
             <div className="h-56 sm:h-64">
               {loading ? (
@@ -469,6 +676,10 @@ export default function MetricDetailPage() {
                   defId={def.id}
                   onRegister={() => navigate(`/registrar?category=${def.categories[0]}`)}
                 />
+              ) : isPeso && weightTab === 'gordura' ? (
+                <SimpleLineChart data={fatSeries} color="#b45309" unit="%" />
+              ) : isPeso && weightTab === 'magra' ? (
+                <SimpleLineChart data={leanSeries} color="#0d9488" unit="kg" />
               ) : (
                 <MainChart
                   defId={def.id}
@@ -488,132 +699,78 @@ export default function MetricDetailPage() {
                 {inWindow.length !== 1 ? 's' : ''} no período
               </p>
             )}
-
-            {hasData && meta.description && (
-              <p className="text-[11px] text-muted-foreground border-t pt-3 leading-relaxed">
-                {meta.description}
-              </p>
-            )}
           </CardContent>
         </Card>
 
-        {/* Estatísticas (estilo All-time Stats do Guava) */}
-        {hasData && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <StatsCard
-              title="Máximo registrado"
-              main={fmt(rangeStats?.max?.value ?? null)}
-              unit={rangeStats?.max ? meta.unit : undefined}
-              sub={
-                rangeStats?.max
-                  ? rangeStats.max.day === todayStr()
-                    ? 'hoje'
-                    : fmtDay(rangeStats.max.day)
-                  : 'sem registros no período'
-              }
-              accent={def.colorClass}
-            />
-            <StatsCard
-              title={meta.dailySum ? 'Total no período' : 'Média no período'}
-              main={fmt(meta.dailySum ? (rangeStats?.total ?? null) : (rangeStats?.avg ?? null))}
-              unit={meta.unit}
-              sub={`${rangeStats?.count ?? 0} registros`}
-              accent="text-foreground"
-            />
-            <StatsCard
-              title="Histórico"
-              main={allTime?.since ? `desde ${fmtDay(allTime.since)}` : '--'}
-              sub={allTime ? `${allTime.count} registros desde o início` : 'sem registros'}
-              accent="text-foreground"
-            />
+        {/* Altura + IMC (painel do peso) */}
+        {isPeso && (
+          <Card>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Ruler className="h-4 w-4 text-slate-600" />
+                <h3 className="text-sm font-semibold">Altura e IMC</h3>
+              </div>
+              <div className="flex items-end gap-2 flex-wrap">
+                <div className="w-28">
+                  <label className="text-[10px] text-muted-foreground">Altura (cm)</label>
+                  <input
+                    type="number"
+                    min={50}
+                    max={260}
+                    step="any"
+                    value={heightDraft}
+                    onChange={(e) => setHeightDraft(e.target.value)}
+                    placeholder="ex: 170"
+                    className="mt-0.5 w-full rounded-md border bg-background px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <Button size="sm" variant="outline" onClick={saveHeight} disabled={savingHeight}>
+                  Salvar altura
+                </Button>
+                {bmi !== null && (
+                  <div className="ml-auto text-right">
+                    <p className="text-[10px] text-muted-foreground">Seu IMC atual</p>
+                    <p className="text-lg font-bold" style={{ color: bmiClass?.color }}>
+                      {bmi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}{' '}
+                      <span className="text-[11px] font-medium">({bmiClass?.label})</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+              {note && <ReferenceNoteBlock note={note} />}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Nota de referência (demais métricas) */}
+        {!isPeso && note && <ReferenceNoteBlock note={note} />}
+
+        {/* Estatísticas All-time (estilo Guava) */}
+        {hasData && allTime && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Estatísticas de todo o período</h3>
+              {goal && (
+                <span className="text-[10px] text-muted-foreground">
+                  {goal.label}: {fmt(goal.value)} {meta.unit}
+                </span>
+              )}
+            </div>
+            <AllTimeStatsBlock stats={allTime} meta={meta} metricId={def.id} />
           </div>
         )}
 
-        {/* Média por dia da semana + Por ano */}
+        {/* Dias da semana + Anos + Horas */}
         {hasData && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <h3 className="text-sm font-semibold">Por dia da semana</h3>
-                <div className="grid grid-cols-7 gap-1.5">
-                  {weekdays.map((w) => {
-                    const nums = weekdays.map((x) => x.value).filter((x): x is number => x !== null)
-                    const maxWd = nums.length ? Math.max(...nums) : 0
-                    const h =
-                      w.value === null || maxWd <= 0
-                        ? 4
-                        : Math.max(4, Math.round((w.value / maxWd) * 100))
-                    return (
-                      <div key={w.label} className="text-center space-y-1">
-                        <div className="h-20 flex items-end justify-center">
-                          <div
-                            className="w-full rounded-t-md"
-                            style={{
-                              height: `${h}%`,
-                              backgroundColor: meta.fill,
-                              opacity: w.value === null ? 0.15 : 0.85,
-                            }}
-                          />
-                        </div>
-                        <p className="text-[10px] font-medium">{w.label}</p>
-                        <p className="text-[9px] text-muted-foreground">{fmt(w.value)}</p>
-                      </div>
-                    )
-                  })}
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {meta.dailySum ? 'Média do total diário' : 'Média do valor registrado'} por dia da
-                  semana (todos os registros)
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                <h3 className="text-sm font-semibold">Por ano</h3>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {perYear.length ? (
-                    perYear.map((y) => {
-                      const nums = perYear
-                        .map((x) => x.value)
-                        .filter((x): x is number => x !== null)
-                      const maxY = nums.length ? Math.max(...nums) : 0
-                      const h =
-                        y.value === null || maxY <= 0
-                          ? 4
-                          : Math.max(4, Math.round((y.value / maxY) * 100))
-                      return (
-                        <div key={y.label} className="text-center space-y-1">
-                          <div className="h-20 flex items-end justify-center">
-                            <div
-                              className="w-full rounded-t-md"
-                              style={{ height: `${h}%`, backgroundColor: meta.fill, opacity: 0.85 }}
-                            />
-                          </div>
-                          <p className="text-[10px] font-medium">{y.label}</p>
-                          <p className="text-[9px] text-muted-foreground">{fmt(y.value)}</p>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <p className="col-span-5 text-[11px] text-muted-foreground">
-                      Sem dados suficientes para comparação anual.
-                    </p>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  {meta.dailySum ? 'Total por ano' : 'Média por ano'} (todos os registros)
-                </p>
-              </CardContent>
-            </Card>
+            <WeekdayStatsBlock stats={weekdays} meta={meta} metricId={def.id} />
+            <div className="space-y-3">
+              <YearStatsBlock stats={perYear} meta={meta} metricId={def.id} />
+              {hasHourStats && <HourStatsBlock stats={perHour} meta={meta} metricId={def.id} />}
+            </div>
           </div>
         )}
       </main>
     </div>
   )
-}
-
-function dayKeyOffset(today: string, offset: number): string {
-  const d = new Date(`${today}T00:00:00`)
-  d.setDate(d.getDate() + offset)
-  return d.toISOString().slice(0, 10)
 }

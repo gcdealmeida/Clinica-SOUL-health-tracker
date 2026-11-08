@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-08T00:02:23.057Z",
+  "generatedAt": "2026-11-08T00:16:45.651Z",
   "collections": [
     {
       "name": "users",
@@ -147,6 +147,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "body_fat_pct",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "lean_mass_kg",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -638,6 +650,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "height_cm",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_user_preferences_user ON user_preferences (user)"]

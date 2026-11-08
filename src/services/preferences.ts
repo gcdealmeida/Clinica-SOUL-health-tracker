@@ -8,6 +8,7 @@ import pb from '@/lib/pocketbase/client'
 
 export interface DashboardPreferences {
   metrics: string[] // ids de METRIC_CARDS, na ordem escolhida
+  heightCm?: number // altura em cm — usada no cálculo do IMC no painel do peso
 }
 
 export const DEFAULT_DASHBOARD_METRICS: string[] = [
@@ -33,8 +34,11 @@ export async function loadDashboardPreferences(): Promise<DashboardPreferences> 
         ? JSON.parse(rec.dashboard_metrics || 'null')
         : rec.dashboard_metrics
     const metrics = Array.isArray(raw) ? raw.filter((m) => typeof m === 'string') : []
+    const height =
+      typeof rec.height_cm === 'number' && rec.height_cm > 0 ? rec.height_cm : undefined
     return {
       metrics: metrics.length > 0 ? metrics : [...DEFAULT_DASHBOARD_METRICS],
+      heightCm: height,
     }
   } catch (_) {
     // Sem registro ainda — usa o padrão
@@ -47,7 +51,11 @@ export async function saveDashboardPreferences(prefs: DashboardPreferences): Pro
   const current = pb.authStore.record
   if (!current?.id) throw new Error('Usuário não autenticado')
 
-  const body = { user: current.id, dashboard_metrics: JSON.stringify(prefs.metrics) }
+  const body: Record<string, unknown> = {
+    user: current.id,
+    dashboard_metrics: JSON.stringify(prefs.metrics),
+  }
+  if (prefs.heightCm !== undefined) body.height_cm = prefs.heightCm
 
   try {
     const rec = await pb.collection('user_preferences').getFirstListItem(`user = '${current.id}'`)
