@@ -15,18 +15,36 @@ import {
   Info,
 } from 'lucide-react'
 
+import { PillarItem } from '@/lib/preventiveScore'
+import { PillarItemDetailModal } from '@/components/profile/PillarItemDetailModal'
+
 interface PreventiveScoreCardProps {
   scoreData: PreventiveHealthScoreData
+  onNavigateTab?: (tab: string) => void
+  onNavigateRoute?: (path: string) => void
 }
 
-export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({ scoreData }) => {
-  const [activePillar, setActivePillar] = useState<'all' | 'prevention' | 'monitoring' | 'action'>(
-    'all',
-  )
+export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({
+  scoreData,
+  onNavigateTab,
+  onNavigateRoute,
+}) => {
   const [expandedPillar, setExpandedPillar] = useState<string | null>('prevention')
+  const [selectedItem, setSelectedItem] = useState<{
+    item: PillarItem
+    pillarTitle: string
+  } | null>(null)
 
   const toggleExpand = (pillarName: string) => {
     setExpandedPillar(expandedPillar === pillarName ? null : pillarName)
+  }
+
+  const handleOpenItem = (item: PillarItem, pillarTitle: string) => {
+    setSelectedItem({ item, pillarTitle })
+  }
+
+  const handleCloseModal = () => {
+    setSelectedItem(null)
   }
 
   const {
@@ -155,21 +173,34 @@ export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({ scoreD
             isOpen={expandedPillar === 'prevention'}
             onToggle={() => toggleExpand('prevention')}
             accentColor="indigo"
+            onItemClick={(item) => handleOpenItem(item, prevention.title)}
           />
           <PillarDetailAccordion
             pillar={monitoring}
             isOpen={expandedPillar === 'monitoring'}
             onToggle={() => toggleExpand('monitoring')}
             accentColor="emerald"
+            onItemClick={(item) => handleOpenItem(item, monitoring.title)}
           />
           <PillarDetailAccordion
             pillar={action}
             isOpen={expandedPillar === 'action'}
             onToggle={() => toggleExpand('action')}
             accentColor="amber"
+            onItemClick={(item) => handleOpenItem(item, action.title)}
           />
         </div>
       </CardContent>
+
+      {/* Modal de Detalhe e Explicação Científica do Item */}
+      <PillarItemDetailModal
+        item={selectedItem?.item ?? null}
+        pillarName={selectedItem?.pillarTitle}
+        isOpen={Boolean(selectedItem)}
+        onClose={handleCloseModal}
+        onNavigateTab={onNavigateTab}
+        onNavigateRoute={onNavigateRoute}
+      />
     </Card>
   )
 }
@@ -234,6 +265,7 @@ interface PillarDetailAccordionProps {
   isOpen: boolean
   onToggle: () => void
   accentColor: 'indigo' | 'emerald' | 'amber'
+  onItemClick: (item: PillarItem) => void
 }
 
 const PillarDetailAccordion: React.FC<PillarDetailAccordionProps> = ({
@@ -241,6 +273,7 @@ const PillarDetailAccordion: React.FC<PillarDetailAccordionProps> = ({
   isOpen,
   onToggle,
   accentColor,
+  onItemClick,
 }) => {
   return (
     <div className="border border-border/80 rounded-xl overflow-hidden bg-card/60">
@@ -269,19 +302,28 @@ const PillarDetailAccordion: React.FC<PillarDetailAccordionProps> = ({
 
       {isOpen && (
         <div className="p-4 pt-1 space-y-2 border-t border-border/60 bg-background/50">
-          <p className="text-xs text-muted-foreground mb-3">{pillar.description}</p>
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-3">
+            <p>{pillar.description}</p>
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-primary font-medium">
+              <Info className="w-3 h-3" />
+              Clique em qualquer item para ver a explicação científica
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {pillar.items.map((item) => (
-              <div
+              <button
                 key={item.id}
-                className={`p-3 rounded-lg border text-xs space-y-1.5 transition-colors ${
+                type="button"
+                onClick={() => onItemClick(item)}
+                className={`group text-left p-3 rounded-lg border text-xs space-y-1.5 transition-all duration-150 cursor-pointer hover:shadow-xs hover:border-primary/50 ${
                   item.fulfilled
-                    ? 'border-emerald-200/70 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20'
-                    : 'border-border/60 bg-muted/20 text-muted-foreground'
+                    ? 'border-emerald-200/70 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-950/20 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40'
+                    : 'border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5 group-hover:text-primary transition-colors">
                     {item.fulfilled ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     ) : (
@@ -298,12 +340,19 @@ const PillarDetailAccordion: React.FC<PillarDetailAccordionProps> = ({
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   {item.description}
                 </p>
-                {item.recommendation && (
-                  <div className="text-[10px] font-medium pt-0.5 text-primary/80">
-                    • {item.recommendation}
-                  </div>
-                )}
-              </div>
+                <div className="flex items-center justify-between pt-0.5">
+                  {item.recommendation ? (
+                    <div className="text-[10px] font-medium text-primary/80 line-clamp-1">
+                      • {item.recommendation}
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+                  <span className="text-[10px] text-primary font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ml-auto">
+                    Ver detalhes →
+                  </span>
+                </div>
+              </button>
             ))}
           </div>
         </div>

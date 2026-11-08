@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Navbar } from '@/components/Navbar'
 import {
@@ -78,6 +79,7 @@ const TABS: { id: ProfileTab; label: string; icon: React.FC<{ className?: string
 
 export const ProfilePage: React.FC = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<ProfileTab>('basic')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -415,7 +417,11 @@ export const ProfilePage: React.FC = () => {
             {/* 1. BASIC INFO (inclui o Preventive Health Score com destaque) */}
             {activeTab === 'basic' && (
               <div className="space-y-6">
-                <PreventiveScoreCard scoreData={scoreResult} />
+                <PreventiveScoreCard
+                  scoreData={scoreResult}
+                  onNavigateTab={(tabId) => setActiveTab(tabId as ProfileTab)}
+                  onNavigateRoute={(routePath) => navigate(routePath)}
+                />
                 {basicProfile && (
                   <BasicInfoSection profile={basicProfile} onSave={handleSaveBasic} />
                 )}
