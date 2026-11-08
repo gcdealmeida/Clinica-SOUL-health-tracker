@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { todayStr } from '@/lib/localDate'
 import {
   FileText,
   Utensils,
@@ -44,7 +45,7 @@ export default function ExamsAndDietsPage() {
   // Form Exames
   const [examTitle, setExamTitle] = useState('')
   const [examType, setExamType] = useState('Exame de Sangue')
-  const [examDate, setExamDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [examDate, setExamDate] = useState(() => todayStr())
   const [examLab, setExamLab] = useState('')
   const [examSummary, setExamSummary] = useState('')
   const [examStatus, setExamStatus] = useState<'normal' | 'alterado' | 'pendente'>('normal')
@@ -135,7 +136,7 @@ export default function ExamsAndDietsPage() {
         prescription: dietPrescription,
         photo: dietPhoto || undefined,
         active: true,
-        start_date: new Date().toISOString().slice(0, 10),
+        start_date: todayStr(),
       })
       toast.success('Dieta cadastrada com sucesso!')
       setShowDietForm(false)

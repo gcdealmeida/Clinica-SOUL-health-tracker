@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { emotionalService } from '@/services/emotional'
 import { EmotionalLog } from '@/types'
+import { todayStr } from '@/lib/localDate'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -62,7 +63,7 @@ export default function EmotionalDiaryPage() {
   const [loading, setLoading] = useState(true)
 
   // Form
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => todayStr())
   const [selectedScore, setSelectedScore] = useState<number>(4)
   const [affectingFactors, setAffectingFactors] = useState('')
   const [notes, setNotes] = useState('')

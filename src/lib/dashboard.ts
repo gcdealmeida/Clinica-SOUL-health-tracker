@@ -1,5 +1,6 @@
 import { HealthMetric, Meal, EmotionalLog } from '@/types'
 import { CATEGORY_DEFINITIONS } from '@/pages/RegisterMetric'
+import { daysAgoStr } from '@/lib/localDate'
 
 /**
  * Helpers de derivação de dados do painel "Hoje" (estilo Guava):
@@ -514,8 +515,7 @@ export function buildMedRows(
   remedyMetrics: HealthMetric[],
 ): MedRow[] {
   const today = todayStr()
-  const weekAgo = new Date(Date.now() - 6 * 86400000)
-  const weekAgoStr = weekAgo.toISOString().slice(0, 10)
+  const weekAgoStr = daysAgoStr(6)
 
   return continuousMeds.map((med) => {
     const taken = remedyMetrics.filter(
@@ -557,7 +557,7 @@ export interface SymptomRow {
  * (text_value = nome, numeric_value = severidade 0-10).
  */
 export function buildSymptomRows(metrics: HealthMetric[], days: 7 | 28 | 90): SymptomRow[] {
-  const cutoff = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10)
+  const cutoff = daysAgoStr(days - 1)
   const today = todayStr()
   const byName = new Map<string, SymptomRow>()
 
@@ -613,7 +613,7 @@ export function lastWeekDays(): Array<{ date: string; letter: string; isToday: b
 // ---------- Resumo da semana do diário emocional ----------
 
 export function weekEmotionalSummary(logs: EmotionalLog[]) {
-  const cutoff = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
+  const cutoff = daysAgoStr(6)
   const today = todayStr()
   const week = logs.filter((l) => {
     const d = (l.date || '').slice(0, 10)

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { nowLocalDateTime } from '@/lib/localDate'
 import {
   UtensilsCrossed,
   Sparkles,
@@ -38,10 +39,7 @@ export default function MealsPage() {
 
   // Form states
   const [mealType, setMealType] = useState<Meal['meal_type']>('almoco')
-  const [dateTime, setDateTime] = useState<string>(() => {
-    const now = new Date()
-    return `${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  })
+  const [dateTime, setDateTime] = useState<string>(() => nowLocalDateTime())
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [description, setDescription] = useState('')
