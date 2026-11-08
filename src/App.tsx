@@ -16,6 +16,7 @@ import MedicationsPage from '@/pages/Medications'
 import EmotionalDiaryPage from '@/pages/EmotionalDiary'
 import AiAnalysesPage from '@/pages/AiAnalyses'
 import MetricDetailPage from '@/pages/MetricDetail'
+import ProfilePage from '@/pages/Profile'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
 import NotFound from '@/pages/NotFound'
 
@@ -33,6 +34,7 @@ export default function App() {
             {/* Rotas protegidas para clientes e profissionais */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/registrar" element={<RegisterMetricPage />} />
               <Route path="/exames-dietas" element={<ExamsAndDietsPage />} />
               <Route path="/medicamentos" element={<MedicationsPage />} />

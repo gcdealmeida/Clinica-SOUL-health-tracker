@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-08T09:27:27.566Z",
+  "generatedAt": "2026-11-08T10:03:54.561Z",
   "collections": [
     {
       "name": "users",
@@ -692,6 +692,36 @@
           "type": "number",
           "required": false,
           "system": false
+        },
+        {
+          "name": "birth_date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "gender",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "blood_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "weight_kg",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "contact_notes",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_user_preferences_user ON user_preferences (user)"]
@@ -767,6 +797,586 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_medications_user ON medications (user)"]
+    },
+    {
+      "name": "profile_biomarkers",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "unit",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reference_range",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_biomarkers_user ON profile_biomarkers (user, date DESC)"]
+    },
+    {
+      "name": "profile_conditions",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "type",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_conditions_user ON profile_conditions (user)"]
+    },
+    {
+      "name": "profile_allergies",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "allergen",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "reaction",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "severity",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diagnosed_date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_allergies_user ON profile_allergies (user)"]
+    },
+    {
+      "name": "profile_vaccinations",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "vaccine",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "dose",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "next_due_date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "batch_or_clinic",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_vaccinations_user ON profile_vaccinations (user, date DESC)"]
+    },
+    {
+      "name": "profile_events",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "impact",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_events_user ON profile_events (user, date DESC)"]
+    },
+    {
+      "name": "profile_genetics",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "trait",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "gene_variant",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "risk_or_status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_genetics_user ON profile_genetics (user)"]
+    },
+    {
+      "name": "profile_care_providers",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "specialty",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "clinic_or_hospital",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "phone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "is_primary",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_providers_user ON profile_care_providers (user)"]
+    },
+    {
+      "name": "profile_lifestyle",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "smoking_status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "alcohol_drinks_per_week",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "exercise_days_per_week",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "exercise_minutes_per_week",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "diet_pattern",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sleep_hours_typical",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "stress_level_typical",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sun_exposure_min_day",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_lifestyle_user ON profile_lifestyle (user)"]
     }
   ]
 }

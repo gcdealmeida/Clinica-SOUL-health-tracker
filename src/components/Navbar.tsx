@@ -31,6 +31,7 @@ export function Navbar({ currentTab }: NavbarProps) {
 
   const navItems = [
     { to: '/', label: 'Hoje', icon: CalendarDays },
+    { to: '/profile', label: 'Profile', icon: UserCheck },
     { to: '/registrar', label: 'Registrar', icon: PlusCircle },
     { to: '/exames-dietas', label: 'Exames & Dietas', icon: FileText },
     { to: '/refeicoes', label: 'Refeições (IA)', icon: UtensilsCrossed },

@@ -11,6 +11,124 @@ export interface User {
   updated: string
 }
 
+export interface UserBasicProfile {
+  name: string
+  email: string
+  phone?: string
+  birthDate?: string // YYYY-MM-DD
+  gender?: string // Masculino, Feminino, Outro, Não informado
+  bloodType?: string // A+, A-, B+, B-, AB+, AB-, O+, O-
+  heightCm?: number
+  weightKg?: number
+  contactNotes?: string
+}
+
+export interface ProfileBiomarker {
+  id: string
+  user: string
+  name: string
+  value: string
+  unit?: string
+  reference_range?: string
+  category?: string
+  status?: string // 'otimo' | 'normal' | 'alterado'
+  date?: string
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileCondition {
+  id: string
+  user: string
+  title: string
+  type: 'condicao' | 'lesao' | 'cirurgia' | 'cronica' | string
+  status?: 'ativa' | 'resolvida' | 'em_tratamento' | string
+  date?: string
+  description?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileAllergy {
+  id: string
+  user: string
+  allergen: string
+  reaction?: string
+  severity?: 'Leve' | 'Moderada' | 'Severa' | string
+  diagnosed_date?: string
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileVaccination {
+  id: string
+  user: string
+  vaccine: string
+  dose?: string
+  date: string
+  next_due_date?: string
+  batch_or_clinic?: string
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileEvent {
+  id: string
+  user: string
+  title: string
+  category?: string
+  date: string
+  description?: string
+  impact?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileGenetics {
+  id: string
+  user: string
+  trait: string
+  gene_variant?: string
+  category?: string
+  risk_or_status?: string
+  notes?: string
+  created: string
+  updated: string
+}
+
+export interface ProfileCareProvider {
+  id: string
+  user: string
+  name: string
+  specialty: string
+  clinic_or_hospital?: string
+  phone?: string
+  email?: string
+  notes?: string
+  is_primary?: boolean
+  created: string
+  updated: string
+}
+
+export interface ProfileLifestyle {
+  id: string
+  user: string
+  smoking_status?: string // 'Não fumante', 'Ex-fumante', 'Fumante ocasional', 'Fumante regular'
+  alcohol_drinks_per_week?: number
+  exercise_days_per_week?: number
+  exercise_minutes_per_week?: number
+  diet_pattern?: string // 'Mediterrânea', 'Anti-inflamatória', 'Low Carb', 'Geral', etc.
+  sleep_hours_typical?: number
+  stress_level_typical?: string // 'Baixo', 'Moderado', 'Elevado'
+  sun_exposure_min_day?: number
+  notes?: string
+  created: string
+  updated: string
+}
+
 export type HealthCategory =
   | 'agua'
   | 'cafe'
