@@ -105,6 +105,8 @@ export interface ChartPoint {
   value: number | null
   /** dia(s) cobertos pelo bucket — ISO YYYY-MM-DD (ou o último dia do bucket) */
   day: string
+  /** string formatada de apoio (ex: horário "23:15" para bedtime/wakeup) */
+  timeStr?: string
 }
 
 export interface DualPoint extends Omit<ChartPoint, 'value'> {
@@ -247,6 +249,85 @@ export function buildSeries(
         : vals.reduce((s, v) => s + v, 0) / vals.length
     }
     out.push({ label: formatDayLabel(bStart, period.id), value, day: bStart })
+  }
+  return out
+}
+
+/**
+ * Constrói a série de gráfico para cada fase do sono (deep, rem, awake, bedtime, wakeup)
+ * agrupando os registros de sono dentro da mesma estrutura de buckets do período selecionado.
+ */
+export function buildSleepPhaseSeries(
+  items: HealthMetric[],
+  period: PeriodOption,
+  phase: 'deep' | 'rem' | 'awake' | 'bedtime' | 'wakeup',
+): ChartPoint[] {
+  const today = todayStr()
+  const isTimePhase = phase === 'bedtime' || phase === 'wakeup'
+
+  const extractVal = (m: HealthMetric): number | null => {
+    if (phase === 'deep')
+      return typeof m.sleep_deep_hours === 'number' && m.sleep_deep_hours >= 0
+        ? m.sleep_deep_hours
+        : null
+    if (phase === 'rem')
+      return typeof m.sleep_rem_hours === 'number' && m.sleep_rem_hours >= 0
+        ? m.sleep_rem_hours
+        : null
+    if (phase === 'awake')
+      return typeof m.sleep_awake_hours === 'number' && m.sleep_awake_hours >= 0
+        ? m.sleep_awake_hours
+        : null
+    if (phase === 'bedtime') return timeStringToDecimalHours(m.bedtime)
+    if (phase === 'wakeup') return timeStringToDecimalHours(m.wakeup)
+    return null
+  }
+
+  // ---- Hoje: faixas de 3 horas ----
+  if (period.id === 'hoje') {
+    const todays = items.filter((m) => dayKey(m.date_time) === today)
+    const buckets: ChartPoint[] = []
+    const labels = ['00-03h', '03-06h', '06-09h', '09-12h', '12-15h', '15-18h', '18-21h', '21-24h']
+    for (let i = 0; i < 8; i++) {
+      const from = i * 3
+      const to = from + 3
+      const inRange = todays.filter((m) => {
+        const h = Number((m.date_time || '').slice(11, 13))
+        return h >= from && h < to
+      })
+      const vals = inRange.map(extractVal).filter((v): v is number => v !== null && !isNaN(v))
+      const value = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+      const timeStr = isTimePhase && value !== null ? decimalHoursToTimeString(value) : undefined
+      buckets.push({ label: labels[i], value, day: today, timeStr })
+    }
+    return buckets
+  }
+
+  // ---- Períodos com dias (2s, 1m, 3m, 6m, 1a) ----
+  const size = bucketSizeDays(period)
+  const count = bucketCount(period)
+  const end = today
+  const start = addDaysStr(today, -(period.days - 1))
+  const out: ChartPoint[] = []
+
+  for (let b = 0; b < count; b++) {
+    const bStart = addDaysStr(start, b * size)
+    const daysLeft = addDaysStr(end, 1) <= bStart ? 0 : Math.min(size, diffDays(bStart, today) + 1)
+    if (daysLeft <= 0) break
+    const bEnd = addDaysStr(bStart, daysLeft - 1)
+    const inBucket = items.filter((m) => {
+      const d = dayKey(m.date_time)
+      return d >= bStart && d <= bEnd
+    })
+    const vals = inBucket.map(extractVal).filter((v): v is number => v !== null && !isNaN(v))
+    const value = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+    const timeStr = isTimePhase && value !== null ? decimalHoursToTimeString(value) : undefined
+    out.push({
+      label: formatDayLabel(bStart, period.id),
+      value,
+      day: bStart,
+      timeStr,
+    })
   }
   return out
 }
@@ -408,6 +489,29 @@ export function monthlyTotals(
 }
 
 // ---------- Formatação de valores ----------
+
+/** Converte string "HH:MM" para horas decimais no dia (0 a 24). */
+export function timeStringToDecimalHours(timeStr?: string): number | null {
+  if (!timeStr) return null
+  const m = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return null
+  const h = parseInt(m[1], 10)
+  const min = parseInt(m[2], 10)
+  if (isNaN(h) || isNaN(min) || h < 0 || h > 24 || min < 0 || min >= 60) return null
+  return h + min / 60
+}
+
+/** Converte horas decimais para string formatada "HH:MM". */
+export function decimalHoursToTimeString(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || isNaN(hours)) return '--'
+  let normalized = hours % 24
+  if (normalized < 0) normalized += 24
+  const h = Math.floor(normalized)
+  const m = Math.round((normalized - h) * 60)
+  const actualH = m === 60 ? (h + 1) % 24 : h
+  const actualM = m === 60 ? 0 : m
+  return `${String(actualH).padStart(2, '0')}:${String(actualM).padStart(2, '0')}`
+}
 
 /** Formata valor conforme a métrica (hora decimal → "7h 30m" para sono). */
 export function formatValue(id: string, v: number | null | undefined): string {

@@ -47,10 +47,12 @@ import {
   findCardDef,
   buildSeries,
   buildDualSeries,
+  buildSleepPhaseSeries,
   computeStats,
   recordValues,
   dayKey,
   formatValue as fmtVal,
+  decimalHoursToTimeString,
 } from '@/lib/metricDetail'
 import {
   SleepGoalAndAdherenceBlock,
@@ -149,16 +151,22 @@ function MainChart({
   unit,
   series,
   dualSeries,
+  isTimeMode = false,
+  customTooltipFormatter,
+  yDomain,
 }: {
   defId: string
   chart: 'line' | 'bars' | 'dualLine'
   stroke: string
   fill: string
   unit: string
-  series: Array<{ label: string; value: number | null }>
+  series: Array<{ label: string; value: number | null; timeStr?: string }>
   dualSeries: Array<{ label: string; sys: number | null; dia: number | null }>
+  isTimeMode?: boolean
+  customTooltipFormatter?: (val: number) => string
+  yDomain?: [number, number]
 }) {
-  const refLines = refLinesFor(defId)
+  const refLines = isTimeMode ? [] : refLinesFor(defId)
   const hasDual = chart === 'dualLine'
   const grid = <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
   const xAxis = (
@@ -172,7 +180,14 @@ function MainChart({
     />
   )
   const yAxis = (domain?: [number, number]) => (
-    <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={42} domain={domain} />
+    <YAxis
+      tick={{ fontSize: 10 }}
+      tickLine={false}
+      axisLine={false}
+      width={46}
+      domain={domain ?? yDomain}
+      tickFormatter={(v: any) => (isTimeMode ? decimalHoursToTimeString(Number(v)) : String(v))}
+    />
   )
   const tooltipBars = (
     <ReTooltip
@@ -182,7 +197,16 @@ function MainChart({
   )
   const tooltipLine = (
     <ReTooltip
-      formatter={(v: any) => [`${fmtVal(defId, Number(v))} ${unit}`, 'Valor']}
+      formatter={(v: any) => {
+        const num = Number(v)
+        if (customTooltipFormatter) {
+          return [customTooltipFormatter(num), 'Valor']
+        }
+        if (isTimeMode) {
+          return [decimalHoursToTimeString(num), 'Horário']
+        }
+        return [`${fmtVal(defId, num)} ${unit}`, 'Valor']
+      }}
       labelFormatter={(l) => String(l)}
     />
   )
@@ -492,18 +516,69 @@ export default function MetricDetailPage() {
   const sleepSeries = useMemo(() => {
     if (!isSono) return null
     if (sleepPhaseTab === 'total') return null // usa series padrão
-    return series.map((pt) => {
-      // busca o registro daquele dia na inWindow
-      const match = inWindow.find((m) => dayKey(m.date_time) === pt.label)
-      let val: number | null = null
-      if (match) {
-        if (sleepPhaseTab === 'deep') val = match.sleep_deep_hours ?? null
-        else if (sleepPhaseTab === 'rem') val = match.sleep_rem_hours ?? null
-        else if (sleepPhaseTab === 'awake') val = match.sleep_awake_hours ?? null
+    return buildSleepPhaseSeries(inWindow, period, sleepPhaseTab)
+  }, [isSono, sleepPhaseTab, inWindow, period])
+
+  // Informações contextuais da fase de sono ativa para o gráfico
+  const sleepPhaseInfo = useMemo(() => {
+    if (!isSono || sleepPhaseTab === 'total') return null
+    const map: Record<
+      'deep' | 'rem' | 'awake' | 'bedtime' | 'wakeup',
+      {
+        label: string
+        unit: string
+        stroke: string
+        fill: string
+        isTime: boolean
+        customFmt?: (v: number) => string
+        domain?: [number, number]
       }
-      return { label: pt.label, value: val }
-    })
-  }, [isSono, sleepPhaseTab, series, inWindow])
+    > = {
+      deep: {
+        label: 'Sono Profundo (Deep)',
+        unit: 'h',
+        stroke: '#4338ca',
+        fill: '#3730a3',
+        isTime: false,
+        customFmt: (v: number) => `${formatHoursMins(v)} de sono profundo`,
+      },
+      rem: {
+        label: 'Sono REM',
+        unit: 'h',
+        stroke: '#0284c7',
+        fill: '#0369a1',
+        isTime: false,
+        customFmt: (v: number) => `${formatHoursMins(v)} de sono REM`,
+      },
+      awake: {
+        label: 'Tempo Acordado (Awake)',
+        unit: 'h',
+        stroke: '#d97706',
+        fill: '#b45309',
+        isTime: false,
+        customFmt: (v: number) => `${formatHoursMins(v)} acordado`,
+      },
+      bedtime: {
+        label: 'Hora de Deitar (Bedtime)',
+        unit: '',
+        stroke: '#8b5cf6',
+        fill: '#7c3aed',
+        isTime: true,
+        customFmt: (v: number) => `Deitou às ${decimalHoursToTimeString(v)}`,
+        domain: [18, 28], // permite deitar de 18h até 04h (28) ou [0, 24]
+      },
+      wakeup: {
+        label: 'Hora de Acordar (Wakeup)',
+        unit: '',
+        stroke: '#059669',
+        fill: '#047857',
+        isTime: true,
+        customFmt: (v: number) => `Acordou às ${decimalHoursToTimeString(v)}`,
+        domain: [4, 14], // foco das 04h às 14h
+      },
+    }
+    return map[sleepPhaseTab]
+  }, [isSono, sleepPhaseTab])
   const dualSeries = useMemo(
     () => (isPressao ? buildDualSeries(inWindow, period) : []),
     [inWindow, period, isPressao],
@@ -623,7 +698,11 @@ export default function MetricDetailPage() {
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-[11px] text-muted-foreground">
-                  {meta.dailySum ? 'Total de hoje' : 'Registro mais recente'}
+                  {isSono && sleepPhaseInfo
+                    ? sleepPhaseInfo.label
+                    : meta.dailySum
+                      ? 'Total de hoje'
+                      : 'Registro mais recente'}
                 </p>
                 {isPressao && bp ? (
                   <div className="flex items-center gap-2 flex-wrap">
@@ -650,6 +729,36 @@ export default function MetricDetailPage() {
                         {bmiClass?.label}
                       </span>
                     )}
+                  </div>
+                ) : isSono && sleepPhaseTab !== 'total' ? (
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span
+                      className="text-3xl font-bold"
+                      style={{ color: sleepPhaseInfo?.stroke ?? '#4f46e5' }}
+                    >
+                      {sleepPhaseTab === 'deep'
+                        ? current?.sleep_deep_hours !== undefined
+                          ? formatHoursMins(current.sleep_deep_hours)
+                          : '--'
+                        : sleepPhaseTab === 'rem'
+                          ? current?.sleep_rem_hours !== undefined
+                            ? formatHoursMins(current.sleep_rem_hours)
+                            : '--'
+                          : sleepPhaseTab === 'awake'
+                            ? current?.sleep_awake_hours !== undefined
+                              ? formatHoursMins(current.sleep_awake_hours)
+                              : '--'
+                            : sleepPhaseTab === 'bedtime'
+                              ? current?.bedtime || '--'
+                              : sleepPhaseTab === 'wakeup'
+                                ? current?.wakeup || '--'
+                                : '--'}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {sleepPhaseTab === 'bedtime' || sleepPhaseTab === 'wakeup'
+                        ? 'horário'
+                        : 'no registro recente'}
+                    </span>
                   </div>
                 ) : isSono ? (
                   <div className="flex items-baseline gap-2 flex-wrap">
@@ -748,15 +857,18 @@ export default function MetricDetailPage() {
                 <SimpleLineChart data={fatSeries} color="#b45309" unit="%" />
               ) : isPeso && weightTab === 'magra' ? (
                 <SimpleLineChart data={leanSeries} color="#0d9488" unit="kg" />
-              ) : isSono && sleepSeries ? (
+              ) : isSono && sleepSeries && sleepPhaseInfo ? (
                 <MainChart
                   defId={def.id}
                   chart={meta.chart}
-                  stroke="#6366f1"
-                  fill="#4f46e5"
-                  unit={meta.unit}
+                  stroke={sleepPhaseInfo.stroke}
+                  fill={sleepPhaseInfo.fill}
+                  unit={sleepPhaseInfo.unit}
                   series={sleepSeries}
                   dualSeries={[]}
+                  isTimeMode={sleepPhaseInfo.isTime}
+                  customTooltipFormatter={sleepPhaseInfo.customFmt}
+                  yDomain={sleepPhaseInfo.domain}
                 />
               ) : (
                 <MainChart
