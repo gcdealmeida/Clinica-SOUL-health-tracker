@@ -40,6 +40,7 @@ import {
   buildSymptomRows,
   weekEmotionalSummary,
   lastWeekDays,
+  todayStr,
   METRIC_CARDS,
   MetricCardData,
   DayStripData,
@@ -98,7 +99,9 @@ export default function HomePage() {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  // Data LOCAL do dispositivo (registros são salvos em horário local — usar
+  // toISOString() (UTC) faz "hoje" virar amanhã após 21h e esvazia a timeline).
+  const today = todayStr()
 
   // ----- Derivações -----
   const cards = useMemo(() => buildMetricCards(visibleCards, metrics), [visibleCards, metrics])
