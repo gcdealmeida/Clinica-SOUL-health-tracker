@@ -9,6 +9,7 @@ import pb from '@/lib/pocketbase/client'
 export interface DashboardPreferences {
   metrics: string[] // ids de METRIC_CARDS, na ordem escolhida
   heightCm?: number // altura em cm — usada no cálculo do IMC no painel do peso
+  sleepGoalHours?: number // meta diária de sono em horas (ex: 7 ou 8)
 }
 
 export const DEFAULT_DASHBOARD_METRICS: string[] = [
@@ -36,9 +37,14 @@ export async function loadDashboardPreferences(): Promise<DashboardPreferences> 
     const metrics = Array.isArray(raw) ? raw.filter((m) => typeof m === 'string') : []
     const height =
       typeof rec.height_cm === 'number' && rec.height_cm > 0 ? rec.height_cm : undefined
+    const sleepGoal =
+      typeof rec.sleep_goal_hours === 'number' && rec.sleep_goal_hours > 0
+        ? rec.sleep_goal_hours
+        : undefined
     return {
       metrics: metrics.length > 0 ? metrics : [...DEFAULT_DASHBOARD_METRICS],
       heightCm: height,
+      sleepGoalHours: sleepGoal,
     }
   } catch (_) {
     // Sem registro ainda — usa o padrão
@@ -56,6 +62,7 @@ export async function saveDashboardPreferences(prefs: DashboardPreferences): Pro
     dashboard_metrics: JSON.stringify(prefs.metrics),
   }
   if (prefs.heightCm !== undefined) body.height_cm = prefs.heightCm
+  if (prefs.sleepGoalHours !== undefined) body.sleep_goal_hours = prefs.sleepGoalHours
 
   try {
     const rec = await pb.collection('user_preferences').getFirstListItem(`user = '${current.id}'`)

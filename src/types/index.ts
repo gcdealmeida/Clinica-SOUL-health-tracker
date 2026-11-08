@@ -40,6 +40,11 @@ export interface HealthMetric {
   attachment?: string
   body_fat_pct?: number // % de gordura corporal (registros de peso)
   lean_mass_kg?: number // massa magra em kg (registros de peso)
+  sleep_deep_hours?: number // sono profundo em horas (ex: 1.5)
+  sleep_rem_hours?: number // sono REM em horas (ex: 1.8)
+  sleep_awake_hours?: number // tempo acordado durante a noite em horas (ex: 0.5)
+  bedtime?: string // horário em que foi para a cama (ex: "23:15")
+  wakeup?: string // horário em que acordou (ex: "07:00")
   created: string
   updated: string
 }

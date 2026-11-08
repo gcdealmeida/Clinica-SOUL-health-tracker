@@ -33,6 +33,11 @@ export const healthService = {
       attachment: r.attachment ? pb.files.getURL(r, r.attachment) : undefined,
       body_fat_pct: r.body_fat_pct,
       lean_mass_kg: r.lean_mass_kg,
+      sleep_deep_hours: r.sleep_deep_hours,
+      sleep_rem_hours: r.sleep_rem_hours,
+      sleep_awake_hours: r.sleep_awake_hours,
+      bedtime: r.bedtime,
+      wakeup: r.wakeup,
       created: r.created,
       updated: r.updated,
     }))
@@ -49,6 +54,11 @@ export const healthService = {
     userId?: string
     body_fat_pct?: number
     lean_mass_kg?: number
+    sleep_deep_hours?: number
+    sleep_rem_hours?: number
+    sleep_awake_hours?: number
+    bedtime?: string
+    wakeup?: string
   }): Promise<HealthMetric> {
     const current = pb.authStore.record
     const user = data.userId || current?.id
@@ -71,6 +81,17 @@ export const healthService = {
     if (data.lean_mass_kg !== undefined && !isNaN(data.lean_mass_kg)) {
       formData.append('lean_mass_kg', String(data.lean_mass_kg))
     }
+    if (data.sleep_deep_hours !== undefined && !isNaN(data.sleep_deep_hours)) {
+      formData.append('sleep_deep_hours', String(data.sleep_deep_hours))
+    }
+    if (data.sleep_rem_hours !== undefined && !isNaN(data.sleep_rem_hours)) {
+      formData.append('sleep_rem_hours', String(data.sleep_rem_hours))
+    }
+    if (data.sleep_awake_hours !== undefined && !isNaN(data.sleep_awake_hours)) {
+      formData.append('sleep_awake_hours', String(data.sleep_awake_hours))
+    }
+    if (data.bedtime) formData.append('bedtime', data.bedtime)
+    if (data.wakeup) formData.append('wakeup', data.wakeup)
 
     const r = await pb.collection('health_metrics').create(formData)
 
@@ -86,6 +107,11 @@ export const healthService = {
       attachment: r.attachment ? pb.files.getURL(r, r.attachment) : undefined,
       body_fat_pct: r.body_fat_pct,
       lean_mass_kg: r.lean_mass_kg,
+      sleep_deep_hours: r.sleep_deep_hours,
+      sleep_rem_hours: r.sleep_rem_hours,
+      sleep_awake_hours: r.sleep_awake_hours,
+      bedtime: r.bedtime,
+      wakeup: r.wakeup,
       created: r.created,
       updated: r.updated,
     }

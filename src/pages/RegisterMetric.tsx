@@ -645,6 +645,12 @@ export default function RegisterMetricPage() {
   const [numericValue, setNumericValue] = useState<string>('')
   const [bodyFat, setBodyFat] = useState<string>('')
   const [leanMass, setLeanMass] = useState<string>('')
+  // Fases do sono
+  const [sleepDeep, setSleepDeep] = useState<string>('')
+  const [sleepRem, setSleepRem] = useState<string>('')
+  const [sleepAwake, setSleepAwake] = useState<string>('')
+  const [bedtime, setBedtime] = useState<string>('')
+  const [wakeup, setWakeup] = useState<string>('')
   const [textValue, setTextValue] = useState<string>('')
   const [severity, setSeverity] = useState<string>('5')
   const [notes, setNotes] = useState<string>('')
@@ -671,6 +677,11 @@ export default function RegisterMetricPage() {
     setNumericValue('')
     setBodyFat('')
     setLeanMass('')
+    setSleepDeep('')
+    setSleepRem('')
+    setSleepAwake('')
+    setBedtime('')
+    setWakeup('')
     setTextValue('')
     setNotes('')
   }, [selectedCategory])
@@ -742,12 +753,31 @@ export default function RegisterMetricPage() {
           selectedCategory === 'peso' && leanMass
             ? parseFloat(leanMass.replace(',', '.'))
             : undefined,
+        sleep_deep_hours:
+          selectedCategory === 'sono' && sleepDeep
+            ? parseFloat(sleepDeep.replace(',', '.'))
+            : undefined,
+        sleep_rem_hours:
+          selectedCategory === 'sono' && sleepRem
+            ? parseFloat(sleepRem.replace(',', '.'))
+            : undefined,
+        sleep_awake_hours:
+          selectedCategory === 'sono' && sleepAwake
+            ? parseFloat(sleepAwake.replace(',', '.'))
+            : undefined,
+        bedtime: selectedCategory === 'sono' && bedtime ? bedtime.trim() : undefined,
+        wakeup: selectedCategory === 'sono' && wakeup ? wakeup.trim() : undefined,
       })
 
       toast.success(`${currentDef.name} registrado com sucesso!`)
       setNumericValue('')
       setBodyFat('')
       setLeanMass('')
+      setSleepDeep('')
+      setSleepRem('')
+      setSleepAwake('')
+      setBedtime('')
+      setWakeup('')
       setTextValue('')
       setSeverity('5')
       setNotes('')
@@ -1100,6 +1130,101 @@ export default function RegisterMetricPage() {
                           placeholder="Ex: 64.2"
                           value={leanMass}
                           onChange={(e) => setLeanMass(e.target.value)}
+                          className="text-xs bg-card"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campos adicionais para Sono: Fases (Deep, REM, Awake, Bedtime, Wakeup) */}
+                {currentDef.id === 'sono' && (
+                  <div className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                        <Moon className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                        Fases do Sono & Horários (Opcional — estilo Guava)
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">
+                        Alimenta o painel com barras por fase
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="space-y-1">
+                        <Label htmlFor="sleep-deep" className="text-[11px] text-muted-foreground">
+                          Profundo / Deep (h)
+                        </Label>
+                        <Input
+                          id="sleep-deep"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="12"
+                          placeholder="Ex: 1.5"
+                          value={sleepDeep}
+                          onChange={(e) => setSleepDeep(e.target.value)}
+                          className="text-xs bg-card"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="sleep-rem" className="text-[11px] text-muted-foreground">
+                          REM (h)
+                        </Label>
+                        <Input
+                          id="sleep-rem"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="12"
+                          placeholder="Ex: 1.8"
+                          value={sleepRem}
+                          onChange={(e) => setSleepRem(e.target.value)}
+                          className="text-xs bg-card"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="sleep-awake" className="text-[11px] text-muted-foreground">
+                          Acordado / Awake (h)
+                        </Label>
+                        <Input
+                          id="sleep-awake"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="12"
+                          placeholder="Ex: 0.5"
+                          value={sleepAwake}
+                          onChange={(e) => setSleepAwake(e.target.value)}
+                          className="text-xs bg-card"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-indigo-200/60 dark:border-indigo-900/40">
+                      <div className="space-y-1">
+                        <Label htmlFor="bedtime" className="text-[11px] text-muted-foreground">
+                          Hora de deitar (Bedtime)
+                        </Label>
+                        <Input
+                          id="bedtime"
+                          type="time"
+                          placeholder="23:00"
+                          value={bedtime}
+                          onChange={(e) => setBedtime(e.target.value)}
+                          className="text-xs bg-card"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="wakeup" className="text-[11px] text-muted-foreground">
+                          Hora de acordar (Wakeup)
+                        </Label>
+                        <Input
+                          id="wakeup"
+                          type="time"
+                          placeholder="07:00"
+                          value={wakeup}
+                          onChange={(e) => setWakeup(e.target.value)}
                           className="text-xs bg-card"
                         />
                       </div>

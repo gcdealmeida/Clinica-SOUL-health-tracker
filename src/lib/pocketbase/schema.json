@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-08T08:53:03.648Z",
+  "generatedAt": "2026-11-08T09:06:01.640Z",
   "collections": [
     {
       "name": "users",
@@ -157,6 +157,36 @@
         {
           "name": "lean_mass_kg",
           "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sleep_deep_hours",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sleep_rem_hours",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sleep_awake_hours",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bedtime",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "wakeup",
+          "type": "text",
           "required": false,
           "system": false
         }
@@ -653,6 +683,12 @@
         },
         {
           "name": "height_cm",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sleep_goal_hours",
           "type": "number",
           "required": false,
           "system": false

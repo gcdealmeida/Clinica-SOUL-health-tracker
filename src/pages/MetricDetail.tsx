@@ -53,6 +53,11 @@ import {
   formatValue as fmtVal,
 } from '@/lib/metricDetail'
 import {
+  SleepGoalAndAdherenceBlock,
+  formatHoursMins,
+} from '@/components/metric/SleepGoalAndAdherence'
+import { SleepPhasesBreakdown, SleepPhaseTab } from '@/components/metric/SleepPhasesBreakdown'
+import {
   ReferenceNote,
   referenceNoteFor,
   lashClassify,
@@ -380,6 +385,8 @@ export default function MetricDetailPage() {
   const [loading, setLoading] = useState(true)
   const [periodId, setPeriodId] = useState<PeriodId>('2s')
   const [weightTab, setWeightTab] = useState<WeightTab>('peso')
+  const [sleepPhaseTab, setSleepPhaseTab] = useState<SleepPhaseTab>('total')
+  const [sleepGoalHours, setSleepGoalHours] = useState<number>(7)
   const [heightCm, setHeightCm] = useState<number | undefined>(undefined)
   const [heightDraft, setHeightDraft] = useState<string>('')
   const [savingHeight, setSavingHeight] = useState(false)
@@ -390,6 +397,7 @@ export default function MetricDetailPage() {
   const goal = useMemo(() => (def ? goalFor(def.id) : null), [def])
   const isPressao = def?.categories[0] === 'pressao'
   const isPeso = def?.categories[0] === 'peso'
+  const isSono = def?.id === 'sono'
   const hasHourStats = !!meta?.dailySum
 
   useEffect(() => {
@@ -405,6 +413,9 @@ export default function MetricDetailPage() {
         setMetrics(list)
         setHeightCm(prefs.heightCm)
         setHeightDraft(prefs.heightCm ? String(prefs.heightCm) : '')
+        if (prefs.sleepGoalHours) {
+          setSleepGoalHours(prefs.sleepGoalHours)
+        }
       })
       .catch(() => toast.error('Não foi possível carregar os registros da métrica'))
       .finally(() => !cancelled && setLoading(false))
@@ -450,10 +461,49 @@ export default function MetricDetailPage() {
     [inWindow, meta, def],
   )
 
+  const saveSleepGoal = async (newGoal: number) => {
+    try {
+      const { saveDashboardPreferences } = await import('@/services/preferences')
+      await saveDashboardPreferences({ metrics: [], sleepGoalHours: newGoal })
+      setSleepGoalHours(newGoal)
+      toast.success(`Meta de sono atualizada para ${newGoal}h`)
+    } catch (_) {
+      toast.error('Não foi possível salvar a meta de sono')
+    }
+  }
+
+  const resetSleepGoal = async () => {
+    try {
+      const { saveDashboardPreferences } = await import('@/services/preferences')
+      await saveDashboardPreferences({ metrics: [], sleepGoalHours: 7 })
+      setSleepGoalHours(7)
+      toast.success('Meta de sono restaurada para 7h')
+    } catch (_) {
+      toast.error('Não foi possível restaurar a meta de sono')
+    }
+  }
+
   const series = useMemo(
     () => (def ? buildSeries(inWindow, period, def) : []),
     [inWindow, period, def],
   )
+
+  // Série de gráfico adaptada para sono quando uma fase é selecionada
+  const sleepSeries = useMemo(() => {
+    if (!isSono) return null
+    if (sleepPhaseTab === 'total') return null // usa series padrão
+    return series.map((pt) => {
+      // busca o registro daquele dia na inWindow
+      const match = inWindow.find((m) => dayKey(m.date_time) === pt.label)
+      let val: number | null = null
+      if (match) {
+        if (sleepPhaseTab === 'deep') val = match.sleep_deep_hours ?? null
+        else if (sleepPhaseTab === 'rem') val = match.sleep_rem_hours ?? null
+        else if (sleepPhaseTab === 'awake') val = match.sleep_awake_hours ?? null
+      }
+      return { label: pt.label, value: val }
+    })
+  }, [isSono, sleepPhaseTab, series, inWindow])
   const dualSeries = useMemo(
     () => (isPressao ? buildDualSeries(inWindow, period) : []),
     [inWindow, period, isPressao],
@@ -601,6 +651,15 @@ export default function MetricDetailPage() {
                       </span>
                     )}
                   </div>
+                ) : isSono ? (
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                      {currentVal ? formatHoursMins(currentVal) : '--'}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      Meta: ≥ {sleepGoalHours}h
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex items-baseline gap-1.5">
                     <span className={`text-3xl font-bold ${def.colorClass}`}>
@@ -641,6 +700,15 @@ export default function MetricDetailPage() {
               </div>
             </div>
 
+            {/* Abas do sono no estilo Guava: Total | Deep | REM | Awake | Bedtime | Wakeup */}
+            {isSono && hasData && (
+              <SleepPhasesBreakdown
+                items={metrics}
+                activeTab={sleepPhaseTab}
+                onSelectTab={setSleepPhaseTab}
+              />
+            )}
+
             {/* Abas do peso: Peso / Gordura % / Massa Magra */}
             {isPeso && (
               <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1 w-fit">
@@ -680,6 +748,16 @@ export default function MetricDetailPage() {
                 <SimpleLineChart data={fatSeries} color="#b45309" unit="%" />
               ) : isPeso && weightTab === 'magra' ? (
                 <SimpleLineChart data={leanSeries} color="#0d9488" unit="kg" />
+              ) : isSono && sleepSeries ? (
+                <MainChart
+                  defId={def.id}
+                  chart={meta.chart}
+                  stroke="#6366f1"
+                  fill="#4f46e5"
+                  unit={meta.unit}
+                  series={sleepSeries}
+                  dualSeries={[]}
+                />
               ) : (
                 <MainChart
                   defId={def.id}
@@ -745,8 +823,28 @@ export default function MetricDetailPage() {
         {/* Nota de referência (demais métricas) */}
         {!isPeso && note && <ReferenceNoteBlock note={note} />}
 
-        {/* Estatísticas All-time (estilo Guava) */}
-        {hasData && allTime && (
+        {/* Estatísticas All-time & Aderência à Meta de Sono (estilo Guava Sleep) */}
+        {isSono && hasData && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">
+                Estatísticas de Todo o Período (All-time Stats)
+              </h3>
+              <span className="text-[10px] text-muted-foreground">
+                Baseado em {metrics.length} registro{metrics.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <SleepGoalAndAdherenceBlock
+              items={metrics}
+              goalHours={sleepGoalHours}
+              onSaveGoal={saveSleepGoal}
+              onResetGoal={resetSleepGoal}
+            />
+          </div>
+        )}
+
+        {/* Estatísticas All-time (estilo Guava - outras métricas) */}
+        {!isSono && hasData && allTime && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Estatísticas de todo o período</h3>
