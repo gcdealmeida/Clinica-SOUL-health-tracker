@@ -24,8 +24,8 @@ import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/p
 import { BasicInfoSection } from '@/components/profile/BasicInfoSection'
 import { PreventiveScoreCard } from '@/components/profile/PreventiveScoreCard'
 import { MedicationsSupplementsSection } from '@/components/profile/MedicationsSupplementsSection'
+import { BiomarkersSection } from '@/components/profile/BiomarkersSection'
 import {
-  BiomarkersSection,
   ConditionsSection,
   AllergiesSection,
   VaccinationsSection,
@@ -432,6 +432,8 @@ export const ProfilePage: React.FC = () => {
             {activeTab === 'biomarkers' && (
               <BiomarkersSection
                 items={biomarkers}
+                exams={exams}
+                userGender={basicProfile?.gender}
                 onAdd={handleAddBiomarker}
                 onDelete={handleDeleteBiomarker}
               />
