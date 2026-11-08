@@ -25,7 +25,11 @@ import {
   Building,
   Activity,
   HeartCrack,
+  Sparkles,
+  Loader2,
+  ExternalLink,
 } from 'lucide-react'
+import { prepareExamPagesForAi, analyzeExamWithAi } from '@/services/examReader'
 
 export default function ExamsAndDietsPage() {
   const { user } = useAuth()
@@ -50,6 +54,8 @@ export default function ExamsAndDietsPage() {
   const [examSummary, setExamSummary] = useState('')
   const [examStatus, setExamStatus] = useState<'normal' | 'alterado' | 'pendente'>('normal')
   const [examFile, setExamFile] = useState<File | null>(null)
+  const [analyzingExamId, setAnalyzingExamId] = useState<string | null>(null)
+  const [analyzingProgress, setAnalyzingProgress] = useState<string>('')
 
   // Form Dietas
   const [dietTitle, setDietTitle] = useState('')
@@ -91,6 +97,53 @@ export default function ExamsAndDietsPage() {
     }
   }
 
+  // Análise inteligente de exame existente ou recém-criado
+  const handleAnalyzeExamWithAi = async (exam: Exam) => {
+    if (!exam.file) {
+      toast.error('Este exame não possui arquivo ou foto anexada para leitura.')
+      return
+    }
+
+    setAnalyzingExamId(exam.id)
+    setAnalyzingProgress('Carregando e renderizando documento...')
+    try {
+      toast.info('Iniciando leitura inteligente do exame com IA...')
+      // Renderiza as páginas do PDF ou imagem em canvas client-side
+      const pages = await prepareExamPagesForAi(exam.file, undefined, 1280, 0.9)
+      if (pages.length === 0) {
+        throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
+      }
+
+      setAnalyzingProgress(`Interpretando ${pages.length} página(s) com IA clínica...`)
+      const result = await analyzeExamWithAi({
+        examId: exam.id,
+        images: pages,
+        title: exam.title,
+        fallbackSource: exam.file,
+      })
+
+      if (result.success) {
+        toast.success(
+          `Exame interpretado com sucesso! ${result.biomarkers_extracted} biomarcador(es) atualizado(s) no seu perfil.`,
+        )
+      } else {
+        toast.success('Exame processado pela IA.')
+      }
+      await loadAll()
+    } catch (err: any) {
+      console.error(err)
+      const msg =
+        err?.response?.error ||
+        err?.response?.message ||
+        err?.message ||
+        'Não foi possível analisar o exame com IA neste momento.'
+      toast.error(typeof msg === 'string' ? msg : 'Erro ao processar exame com IA')
+    } finally {
+      setAnalyzingExamId(null)
+      setAnalyzingProgress('')
+    }
+  }
+
   const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!examTitle || !examType || !examDate) {
@@ -99,7 +152,7 @@ export default function ExamsAndDietsPage() {
     }
     setSaving(true)
     try {
-      await medicalService.createExam({
+      const createdExam = await medicalService.createExam({
         title: examTitle,
         type: examType,
         date: examDate,
@@ -109,6 +162,32 @@ export default function ExamsAndDietsPage() {
         file: examFile || undefined,
       })
       toast.success('Exame cadastrado com sucesso!')
+
+      // Se um arquivo foi anexado e o resumo estiver em branco,
+      // dispara automaticamente a leitura com IA
+      if (examFile && !examSummary) {
+        toast.info('Arquivo anexado detectado: iniciando leitura automática com IA...')
+        try {
+          const pages = await prepareExamPagesForAi(examFile, undefined, 1280, 0.9)
+          if (pages.length > 0) {
+            const aiRes = await analyzeExamWithAi({
+              examId: createdExam.id,
+              images: pages,
+              title: createdExam.title,
+              fallbackSource: examFile,
+            })
+            if (aiRes.biomarkers_extracted > 0) {
+              toast.success(
+                `IA transcreveu ${aiRes.biomarkers_extracted} biomarcadores automaticamente para a aba Biomarkers!`,
+              )
+            }
+          }
+        } catch (aiErr: any) {
+          console.warn('Leitura automática em segundo plano falhou:', aiErr)
+          toast.warning('O exame foi salvo. Você pode acionar "Ler com IA" no card do exame.')
+        }
+      }
+
       setShowExamForm(false)
       setExamTitle('')
       setExamSummary('')
@@ -401,20 +480,70 @@ export default function ExamsAndDietsPage() {
                         </p>
                       </div>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteExam(ex.id)}
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        {ex.file && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={analyzingExamId === ex.id}
+                            onClick={() => handleAnalyzeExamWithAi(ex)}
+                            className="h-7 px-2 text-[11px] gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
+                            title="Transcrever exame com IA e atualizar a aba Biomarkers"
+                          >
+                            {analyzingExamId === ex.id ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span>Lendo...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3 w-3 text-emerald-600" />
+                                <span>
+                                  {ex.summary_results ? 'Reanalisar com IA' : 'Ler com IA'}
+                                </span>
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteExam(ex.id)}
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </CardHeader>
 
                     <CardContent className="space-y-2 text-xs">
-                      {ex.summary_results && (
+                      {analyzingExamId === ex.id && (
+                        <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2 text-emerald-800 dark:text-emerald-200">
+                          <Loader2 className="h-4 w-4 animate-spin text-emerald-600 shrink-0" />
+                          <span className="text-xs font-medium">
+                            {analyzingProgress ||
+                              'Processando exame e transcrevendo biomarcadores...'}
+                          </span>
+                        </div>
+                      )}
+                      {ex.summary_results ? (
                         <div className="bg-muted/40 p-2.5 rounded-lg text-foreground/90 whitespace-pre-line text-xs font-mono">
                           {ex.summary_results}
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between">
+                          <span>Resumo ainda não computado.</span>
+                          {ex.file && (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              disabled={analyzingExamId === ex.id}
+                              onClick={() => handleAnalyzeExamWithAi(ex)}
+                              className="h-auto p-0 text-xs font-semibold text-emerald-600 hover:underline"
+                            >
+                              Transcrever agora com IA →
+                            </Button>
+                          )}
                         </div>
                       )}
                       {ex.file && (
