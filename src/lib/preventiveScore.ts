@@ -98,6 +98,21 @@ export function computePreventiveHealthScore(input: ComputeScoreInput): Preventi
   const hasLipid = Boolean(lipidExam || lipidBio)
   const lipidDate = lipidExam?.date || lipidBio?.date
 
+  // Valores reais do perfil lipídico (colesterol, HDL, LDL, triglicerídeos) com data
+  const lipidNames = ['colesterol total', 'hdl', 'ldl', 'trigliceri', 'vldl', 'não-hdl', 'nao-hdl']
+  const lipidRecords = biomarkers.filter((b) => {
+    const n = b.name.toLowerCase()
+    return lipidNames.some((k) => n.includes(k))
+  })
+  const fmtLip = (b: ProfileBiomarker) => `${b.name}: ${b.value}${b.unit ? ` ${b.unit}` : ''}`
+  const lipidValueLabel = lipidRecords.length
+    ? `${lipidRecords.slice(0, 4).map(fmtLip).join(' · ')} (${(() => {
+        const d = (lipidRecords.find((b) => b.date)?.date || lipidDate || '').slice(0, 10)
+        const p = d.split('-')
+        return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d
+      })()})`
+    : undefined
+
   // 2. Rastreamento de Diabetes (Glicemia ou HbA1c)
   const diabetesExam = exams.find(
     (e) =>
@@ -170,6 +185,7 @@ export function computePreventiveHealthScore(input: ComputeScoreInput): Preventi
       description: 'Avaliação de HDL, LDL e Triglicerídeos nos últimos 12 meses',
       fulfilled: hasLipid,
       lastDate: lipidDate,
+      valueLabel: lipidValueLabel,
       recommendation: hasLipid
         ? 'Em dia (anual)'
         : 'Recomendado agendar exame de sangue preventivo',

@@ -17,6 +17,7 @@ import EmotionalDiaryPage from '@/pages/EmotionalDiary'
 import AiAnalysesPage from '@/pages/AiAnalyses'
 import MetricDetailPage from '@/pages/MetricDetail'
 import ProfilePage from '@/pages/Profile'
+import BiomarkersPanelPage from '@/pages/BiomarkersPanel'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
 import NotFound from '@/pages/NotFound'
 
@@ -35,6 +36,7 @@ export default function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/biomarcadores" element={<BiomarkersPanelPage />} />
               <Route path="/registrar" element={<RegisterMetricPage />} />
               <Route path="/exames-dietas" element={<ExamsAndDietsPage />} />
               <Route path="/medicamentos" element={<MedicationsPage />} />
