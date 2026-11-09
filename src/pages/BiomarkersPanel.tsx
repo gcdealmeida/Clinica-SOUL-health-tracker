@@ -14,8 +14,6 @@ import { Search, ChevronDown, ArrowDown, ArrowUp, Minimize2, FlaskConical } from
 import { buildBiomarkerPanel, PanelMarkerData, PanelMarkerStatus } from '@/lib/biomarkerPanelData'
 import { cn } from '@/lib/utils'
 
-const PAGE_SIZE = 4
-
 function formatDateBR(dateStr?: string): string | null {
   if (!dateStr) return null
   const parts = dateStr.slice(0, 10).split('-')
@@ -159,12 +157,9 @@ function GroupSection({
   subtitle?: string
   markers: PanelMarkerData[]
 }) {
+  // Grupo sempre inicia aberto; o usuário pode recolher pelo cabeçalho.
   const [expanded, setExpanded] = useState(true)
-  const [page, setPage] = useState(1)
   const withData = markers.filter((m) => m.status !== 'no_data')
-
-  const visible = markers.slice(0, page * PAGE_SIZE)
-  const remaining = markers.length - visible.length
 
   return (
     <Card className="border-border/70 bg-card/80">
@@ -200,18 +195,9 @@ function GroupSection({
 
         {expanded && (
           <div className="px-3 pb-3 sm:px-4 sm:pb-4 space-y-2">
-            {visible.map((m) => (
+            {markers.map((m) => (
               <MarkerCard key={m.spec.id} m={m} />
             ))}
-            {remaining > 0 && (
-              <button
-                type="button"
-                onClick={() => setPage((p) => p + 1)}
-                className="w-full rounded-xl border border-dashed border-border/70 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/40 transition-colors"
-              >
-                Mostrar mais {remaining} marcador{remaining > 1 ? 'es' : ''}
-              </button>
-            )}
           </div>
         )}
       </CardContent>
@@ -228,7 +214,8 @@ export default function BiomarkersPanelPage() {
   const [biomarkers, setBiomarkers] = useState<ProfileBiomarker[]>([])
   const [metrics, setMetrics] = useState<HealthMetric[]>([])
   const [query, setQuery] = useState('')
-  const [outOnly, setOutOnly] = useState(true)
+  // Começa em "Todos" para que todos os grupos e marcadores apareçam ao abrir a página.
+  const [outOnly, setOutOnly] = useState(false)
 
   useEffect(() => {
     let cancelled = false
