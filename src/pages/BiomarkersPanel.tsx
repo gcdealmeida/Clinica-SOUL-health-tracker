@@ -158,7 +158,7 @@ function GroupSection({
   subtitle?: string
   markers: PanelMarkerData[]
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [page, setPage] = useState(1)
   const withData = markers.filter((m) => m.status !== 'no_data')
 
