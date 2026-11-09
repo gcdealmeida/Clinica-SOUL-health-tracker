@@ -51,7 +51,8 @@ function StatusChip({
 }
 
 function MarkerCard({ m }: { m: PanelMarkerData }) {
-  const [open, setOpen] = useState(false)
+  // Réguas visíveis por padrão; o usuário pode recolher cada marcador pelo cabeçalho.
+  const [open, setOpen] = useState(true)
   const noData = m.status === 'no_data'
   const dateLabel = formatDateBR(m.date)
 
