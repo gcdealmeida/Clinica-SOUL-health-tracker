@@ -370,15 +370,6 @@ export default function HomePage() {
               </button>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                onClick={() => setOnceOpen(true)}
-              >
-                <Pill className="h-3.5 w-3.5 mr-1" />
-                Adicionar Medicação
-              </Button>
               {medRows.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   Nenhuma medicação registrada nesta semana.{' '}
@@ -430,30 +421,29 @@ export default function HomePage() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs flex-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                      onClick={() => {
-                        setTakePreset(null)
-                        setTakeOpen(true)
-                      }}
-                    >
-                      <Pill className="h-3.5 w-3.5 mr-1" />
-                      Tomei medicação
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                      onClick={() => setAllOpen(true)}
-                    >
-                      Todas
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                    onClick={() => {
+                      setTakePreset(null)
+                      setTakeOpen(true)
+                    }}
+                  >
+                    <Pill className="h-3.5 w-3.5 mr-1" />
+                    Tomei medicação
+                  </Button>
                 </>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                onClick={() => setOnceOpen(true)}
+              >
+                <Pill className="h-3.5 w-3.5 mr-1" />
+                Adicionar Medicação
+              </Button>
             </CardContent>
           </Card>
 
