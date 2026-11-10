@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeftRight, Plus } from 'lucide-react'
+import { ArrowLeftRight, ListChecks, Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SymptomGridTable } from '@/components/symptoms/SymptomGridTable'
 import { SymptomPickerDialog } from '@/components/symptoms/SymptomPickerDialog'
 import { SymptomCompareDialog } from '@/components/symptoms/SymptomCompareDialog'
+import { AllSymptomsDialog } from '@/components/symptoms/AllSymptomsDialog'
 import { buildSymptomGrid, SYMPTOM_PERIODS, type SymptomPeriod } from '@/lib/symptomGrid'
 import type { HealthMetric } from '@/types'
 
@@ -19,6 +19,7 @@ export function SymptomsCard({ metrics, onChanged }: SymptomsCardProps) {
   const [period, setPeriod] = useState<SymptomPeriod>(7)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [allOpen, setAllOpen] = useState(false)
 
   const grid = useMemo(() => buildSymptomGrid(metrics, period), [metrics, period])
 
@@ -26,9 +27,15 @@ export function SymptomsCard({ metrics, onChanged }: SymptomsCardProps) {
     <Card className="border-border/60">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-sm">Sintomas</CardTitle>
-        <Link to="/registrar?category=sintoma" className="text-xs text-emerald-600 hover:underline">
-          Registrar
-        </Link>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 px-2 dark:hover:bg-emerald-950/40"
+          onClick={() => setAllOpen(true)}
+        >
+          <ListChecks className="h-3.5 w-3.5 mr-1" />
+          Todos Sintomas
+        </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-1.5">
@@ -84,6 +91,7 @@ export function SymptomsCard({ metrics, onChanged }: SymptomsCardProps) {
         metrics={metrics}
         period={period}
       />
+      <AllSymptomsDialog open={allOpen} onOpenChange={setAllOpen} />
     </Card>
   )
 }
