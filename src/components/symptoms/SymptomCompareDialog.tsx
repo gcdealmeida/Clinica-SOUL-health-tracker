@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import {
   Dialog,
@@ -17,6 +17,8 @@ interface SymptomCompareDialogProps {
   onOpenChange: (open: boolean) => void
   metrics: HealthMetric[]
   period: SymptomPeriod
+  /** Sintoma pré-selecionado ao abrir (ex.: vindo do painel de detalhe). */
+  initialSelected?: string
 }
 
 /** "Comparar": escolhe 2 ou mais sintomas do período e mostra a grade compartilhada deles. */
@@ -25,8 +27,14 @@ export function SymptomCompareDialog({
   onOpenChange,
   metrics,
   period,
+  initialSelected,
 }: SymptomCompareDialogProps) {
   const [picked, setPicked] = useState<string[]>([])
+
+  useEffect(() => {
+    if (open && initialSelected) setPicked([initialSelected])
+    if (!open) setPicked([])
+  }, [open, initialSelected])
 
   const fullGrid = useMemo(() => buildSymptomGrid(metrics, period), [metrics, period])
 

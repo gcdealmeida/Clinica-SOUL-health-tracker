@@ -20,6 +20,7 @@ export function SymptomsCard({ metrics, onChanged }: SymptomsCardProps) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
   const [allOpen, setAllOpen] = useState(false)
+  const [comparePreset, setComparePreset] = useState<string | undefined>(undefined)
 
   const grid = useMemo(() => buildSymptomGrid(metrics, period), [metrics, period])
 
@@ -87,11 +88,24 @@ export function SymptomsCard({ metrics, onChanged }: SymptomsCardProps) {
       <SymptomPickerDialog open={pickerOpen} onOpenChange={setPickerOpen} onSaved={onChanged} />
       <SymptomCompareDialog
         open={compareOpen}
-        onOpenChange={setCompareOpen}
+        onOpenChange={(v) => {
+          setCompareOpen(v)
+          if (!v) setComparePreset(undefined)
+        }}
         metrics={metrics}
         period={period}
+        initialSelected={comparePreset}
       />
-      <AllSymptomsDialog open={allOpen} onOpenChange={setAllOpen} />
+      <AllSymptomsDialog
+        open={allOpen}
+        onOpenChange={setAllOpen}
+        metrics={metrics}
+        onCompare={(name) => {
+          setAllOpen(false)
+          setCompareOpen(true)
+          setComparePreset(name)
+        }}
+      />
     </Card>
   )
 }
