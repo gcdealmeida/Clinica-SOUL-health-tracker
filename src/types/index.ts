@@ -253,3 +253,21 @@ export interface AiAnalysis {
   created: string
   updated: string
 }
+
+export type ReminderType = 'remedio' | 'exame' | 'consulta' | 'habito' | 'outro'
+export type ReminderRepeat = 'none' | 'daily' | 'weekly' | 'monthly'
+export type ReminderStatus = 'pending' | 'completed' | 'cancelled'
+
+export interface Reminder {
+  id: string
+  user: string
+  type: ReminderType
+  title: string
+  date: string // YYYY-MM-DD
+  time?: string // HH:MM
+  repeat?: ReminderRepeat
+  status?: ReminderStatus
+  notes?: string
+  created: string
+  updated: string
+}

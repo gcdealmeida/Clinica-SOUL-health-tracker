@@ -9,26 +9,20 @@ import {
   HeartPulse,
   Sparkles,
   Users,
-  LogOut,
   UserCheck,
   Activity,
   FlaskConical,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { UserMenuDropdown } from '@/components/menu/UserMenuDropdown'
 
 interface NavbarProps {
   currentTab?: string
 }
 
 export function Navbar({ currentTab }: NavbarProps) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
-
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
 
   const navItems = [
     { to: '/', label: 'Hoje', icon: CalendarDays },
@@ -89,41 +83,9 @@ export function Navbar({ currentTab }: NavbarProps) {
         </nav>
 
         {/* User profile & controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {user ? (
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-medium text-foreground leading-tight max-w-[140px] truncate">
-                  {user.name || user.email}
-                </span>
-                <span className="text-[10px] text-muted-foreground flex items-center justify-end gap-1">
-                  {user.role === 'profissional' ? (
-                    <Badge
-                      variant="outline"
-                      className="h-4 text-[9px] px-1 bg-amber-50 text-amber-700 border-amber-200"
-                    >
-                      Profissional
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className="h-4 text-[9px] px-1 bg-emerald-50 text-emerald-700 border-emerald-200"
-                    >
-                      Cliente
-                    </Badge>
-                  )}
-                </span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleLogout}
-                title="Sair"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
+            <UserMenuDropdown align="right" />
           ) : (
             <Button
               size="sm"
