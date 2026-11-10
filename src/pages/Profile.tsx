@@ -421,6 +421,11 @@ export const ProfilePage: React.FC = () => {
                   scoreData={scoreResult}
                   onNavigateTab={(tabId) => setActiveTab(tabId as ProfileTab)}
                   onNavigateRoute={(routePath) => navigate(routePath)}
+                  metrics={metrics}
+                  biomarkers={biomarkers}
+                  exams={exams}
+                  vaccinations={vaccinations}
+                  lifestyle={lifestyle}
                 />
                 {basicProfile && (
                   <BasicInfoSection profile={basicProfile} onSave={handleSaveBasic} />

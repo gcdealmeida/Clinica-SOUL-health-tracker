@@ -17,17 +17,28 @@ import {
 
 import { PillarItem } from '@/lib/preventiveScore'
 import { PillarItemDetailModal } from '@/components/profile/PillarItemDetailModal'
+import { HealthMetric, Exam, ProfileBiomarker, ProfileVaccination, ProfileLifestyle } from '@/types'
 
 interface PreventiveScoreCardProps {
   scoreData: PreventiveHealthScoreData
   onNavigateTab?: (tab: string) => void
   onNavigateRoute?: (path: string) => void
+  metrics?: HealthMetric[]
+  biomarkers?: ProfileBiomarker[]
+  exams?: Exam[]
+  vaccinations?: ProfileVaccination[]
+  lifestyle?: ProfileLifestyle | null
 }
 
 export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({
   scoreData,
   onNavigateTab,
   onNavigateRoute,
+  metrics = [],
+  biomarkers = [],
+  exams = [],
+  vaccinations = [],
+  lifestyle = null,
 }) => {
   const [expandedPillar, setExpandedPillar] = useState<string | null>('prevention')
   const [selectedItem, setSelectedItem] = useState<{
@@ -192,7 +203,7 @@ export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({
         </div>
       </CardContent>
 
-      {/* Modal de Detalhe e Explicação Científica do Item */}
+      {/* Modal de Detalhe, Histórico, Gráfico e Diretrizes OMS/AHA */}
       <PillarItemDetailModal
         item={selectedItem?.item ?? null}
         pillarName={selectedItem?.pillarTitle}
@@ -200,6 +211,11 @@ export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({
         onClose={handleCloseModal}
         onNavigateTab={onNavigateTab}
         onNavigateRoute={onNavigateRoute}
+        metrics={metrics}
+        biomarkers={biomarkers}
+        exams={exams}
+        vaccinations={vaccinations}
+        lifestyle={lifestyle}
       />
     </Card>
   )
