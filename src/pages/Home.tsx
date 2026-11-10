@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { SymptomsCard } from '@/components/symptoms/SymptomsCard'
 
 import { toast } from 'sonner'
 import {
@@ -30,14 +31,12 @@ import {
   Droplets,
   Coffee,
   ClipboardList,
-  AlertTriangle,
   Pill,
 } from 'lucide-react'
 import {
   buildMetricCards,
   buildDayStrip,
   buildMedRows,
-  buildSymptomRows,
   weekEmotionalSummary,
   lastWeekDays,
   todayStr,
@@ -66,9 +65,6 @@ export default function HomePage() {
   const [visibleCards, setVisibleCards] = useState<string[]>([])
   const [editingCards, setEditingCards] = useState(false)
   const [savingOrder, setSavingOrder] = useState(false)
-
-  // Alternador de janela dos sintomas (7/28/90 dias)
-  const [symptomWindow, setSymptomWindow] = useState<7 | 28 | 90>(7)
 
   useEffect(() => {
     if (!user) return
@@ -127,10 +123,7 @@ export default function HomePage() {
     ],
     [plannedMeds, medRecords, remedyMetrics],
   )
-  const symptomRows = useMemo(
-    () => buildSymptomRows(metrics, symptomWindow),
-    [metrics, symptomWindow],
-  )
+
   const weekDays = useMemo(() => lastWeekDays(), [])
   const emoSummary = useMemo(() => weekEmotionalSummary(emotionalLogs), [emotionalLogs])
   const todayDiary = emotionalLogs.find((l) => (l.date || '').slice(0, 10) === today)
@@ -447,59 +440,7 @@ export default function HomePage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/60">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <CardTitle className="text-sm">Sintomas</CardTitle>
-                <Link
-                  to="/registrar?category=sintoma"
-                  className="text-xs text-emerald-600 hover:underline"
-                >
-                  Registrar
-                </Link>
-              </div>
-              <div className="flex items-center gap-1">
-                {([7, 28, 90] as const).map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => setSymptomWindow(w)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                      symptomWindow === w
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
-                        : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {w === 90 ? '3 meses' : `${w} dias`}
-                  </button>
-                ))}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {symptomRows.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Nenhum sintoma registrado nesta janela.
-                </p>
-              )}
-              {symptomRows.map((s) => (
-                <div key={s.id} className="flex items-center gap-2">
-                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate">{s.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      severidade {s.severity}/10 • {s.count} registro{s.count > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <div className="w-20 h-1.5 rounded-full bg-muted overflow-hidden shrink-0">
-                    <div
-                      className="h-full rounded-full bg-amber-500"
-                      style={{ width: `${Math.min(100, s.severity * 10)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <SymptomsCard metrics={metrics} onChanged={loadAll} />
         </div>
 
         {/* Diário do dia + resumo da semana */}
