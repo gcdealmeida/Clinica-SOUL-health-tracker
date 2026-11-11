@@ -168,6 +168,8 @@ routerAdd(
   $apis.requireAuth(),
 )
 
+// ============================================================
+
 // 2. Endpoint: POST /backend/v1/ai/analyze-meal
 // Analisa a FOTO real do prato (imagem multimodal enviada como base64 data URL)
 // ou uma descrição textual, lista os alimentos e estima peso e calorias.
