@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-11T17:28:20.704Z",
+  "generatedAt": "2026-11-11T21:22:02.909Z",
   "collections": [
     {
       "name": "users",
@@ -1468,6 +1468,24 @@
         {
           "name": "analysis_started_at",
           "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "analysis_stats",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "analysis_pages",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "analysis_progress",
+          "type": "text",
           "required": false,
           "system": false
         }

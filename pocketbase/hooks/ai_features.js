@@ -1308,3 +1308,6 @@ routerAdd(
   },
   $apis.requireAuth(),
 )
+
+// 3b. Análise assíncrona do exame: kickoff 202 + runner em cron
+// implementados em pocketbase/hooks/ai_features_exam_async.js (mesmos padrões).
