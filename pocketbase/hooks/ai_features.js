@@ -923,15 +923,21 @@ routerAdd(
       'Você receberá páginas digitalizadas/fotos em alta nitidez de um laudo de exame (pode ser laboratorial — Hemograma completo, Perfil Lipídico, Bioquímica, Hormônios — ou de imagem: Ressonância, Tomografia, Ultrassom, Endoscopia, Eletrocardiograma, Raio-X etc.). ' +
       'Antes de extrair, IDENTIFIQUE sozinho do que o documento se trata e preencha "exam_title" e "exam_type" de acordo (ex: "Hemograma Completo", "Perfil Lipídico", "Ressonância Magnética de Lombar", "Endoscopia Digestiva Alta"). ' +
       'Se for um laudo de imagem/imagemológica, extraia como "biomarkers" apenas os achados mensuráveis citados (medidas, graus, dimensões), e capriche no "summary_text" com a conclusão do radiologista. ' +
-      'Sua missão é extrair com precisão absoluta TODOS os marcadores medidos, valores numéricos exatos, unidades e faixas de referência que constam no documento. ' +
+      'Sua missão é extrair com precisão absoluta TODAS as linhas de resultados que constam no laudo — a lista completa de analises do painel, página por página, de cima a baixo. ' +
+      'NÃO limite a extração a exemplos, catálogos ou listas predefinidas de marcadores: NENHUM resultado presente no laudo pode ficar de fora, mesmo que não seja um exame comum, ' +
+      'não esteja em nenhum catálogo interno, tenha nome abreviado, código de exame (ex: "TSH", "VDRL", "Ácido Úrico", "TGO/AST", "TGP/ALT", "GGT", "Fosfatase Alcalina", "Uréia", "Creatinina", ' +
+      '"Sódio", "Potássio", "Cálcio", "Ferritina", "Vitamina D", "PSA", "T4 Livre", "HbA1c", "Triglicerídeos", "VLDL", "LDL", "HDL", "Urea", "Paratormônio", "Ácido Fólico", "B12", ou qualquer outro). ' +
+      'Os exemplos citados são ilustrativos — a regra é: se o laudo traz a linha de resultado, ela vira um item de "biomarkers". ' +
+      'Marcadores de subfrações, índices calculados (RNI, razões), comentários numéricos do rodapé e qualquer linha com valor + unidade + referência também entram. ' +
       'Diretrizes obrigatórias:\n' +
-      '1. Extraia cada biomarcador individualmente (ex: Hemácias/Eritrócitos, Hemoglobina, Hematócrito, VCM, HCM, CHCM, RDW, Leucócitos totais, Neutrófilos, Linfócitos, Monócitos, Eosinófilos, Basófilos, Plaquetas, Glicose, Colesterol etc.).\n' +
+      '1. Percorra TODAS as páginas do laudo e extraia CADA linha de resultado individualmente (ex: Hemácias/Eritrócitos, Hemoglobina, Hematócrito, VCM, HCM, CHCM, RDW, Leucócitos totais, Neutrófilos, Linfócitos, Monócitos, Eosinófilos, Basófilos, Plaquetas, Glicose, Colesterol etc.).\n' +
       '2. Em "value", forneça o número limpo (use ponto decimal, ex: "14.2", "4500", "0.95"). Não coloque a unidade no campo "value".\n' +
       '3. Em "unit", forneça a unidade exata impressa (ex: "g/dL", "%", "fL", "pg", "/µL", "mg/dL", "ng/mL", "mUI/L"). Se não constar, deixe vazio.\n' +
       '4. Em "reference_range", descreva sucintamente a faixa de referência normal indicada no laudo.\n' +
       '5. Em "status", classifique como "otimo" (dentro da normalidade) ou "alterado" (fora da faixa de referência indicada).\n' +
       '6. Em "exam_date", extraia a data de coleta ou realização indicada no laudo no formato AAAA-MM-DD (ex: "2026-11-07"). Se não encontrar, deixe vazio.\n' +
       '7. Em "summary_text", forneça um resumo clínico legível, bem formatado com quebras de linha e seções, destacando os valores encontrados e qualquer alteração relevante.\n' +
+      '8. Antes de responder, CONFIRA linha por linha do laudo: cada linha de resultado impressa deve ter um item correspondente em "biomarkers". O resumo pode ser mais curto, mas a lista de marcadores deve ser COMPLETA.\n' +
       'Responda ESTRITAMENTE em JSON válido, sem texto fora do JSON, no formato:\n' +
       '{\n' +
       '  "exam_title": "Hemograma Completo",\n' +
@@ -959,7 +965,7 @@ routerAdd(
       images.length +
       ' página(s) deste laudo de exame laboratorial (' +
       examTitleHint +
-      '). Extraia todos os marcadores, valores, unidades, referências e elabore o resumo.'
+      '). Extraia a LISTA COMPLETA de resultados: todas as linhas de analises do laudo, incluindo marcadores fora de qualquer catálogo, com valores, unidades, referências — e elabore o resumo.'
 
     // Função interna para construir a mensagem multimodal com as imagens do exame
     const buildUserContent = (variant) => {

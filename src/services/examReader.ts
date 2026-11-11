@@ -134,10 +134,12 @@ export async function convertImageToJpegBase64(
 
 /**
  * Converte páginas de um PDF em uma lista de strings data URL JPEG base64 (até maxPages).
+ * Por padrão até 5 páginas — o mesmo limite aceito pelo hook analyze-exam — para que
+ * laudos multipágina tenham TODAS as linhas de resultado enviadas à IA.
  */
 export async function renderPdfToJpegBase64List(
   pdfSource: ArrayBuffer | Uint8Array | Blob | string,
-  maxPages = 3,
+  maxPages = 5,
   maxSide = 1280,
   quality = 0.9,
 ): Promise<string[]> {
@@ -212,7 +214,7 @@ export async function prepareExamPagesForAi(
       : typeof source === 'string' && source.toLowerCase().includes('.pdf'))
 
   if (isLikelyPdf) {
-    return await renderPdfToJpegBase64List(source, 3, maxSide, quality)
+    return await renderPdfToJpegBase64List(source, 5, maxSide, quality)
   }
 
   if (source instanceof Blob) {
@@ -226,7 +228,7 @@ export async function prepareExamPagesForAi(
     const blob = await resp.blob()
     const contentType = resp.headers.get('content-type') || ''
     if (contentType.includes('pdf') || source.toLowerCase().includes('.pdf')) {
-      return await renderPdfToJpegBase64List(blob, 3, maxSide, quality)
+      return await renderPdfToJpegBase64List(blob, 5, maxSide, quality)
     }
     const single = await convertImageToJpegBase64(blob, maxSide, quality)
     return [single]
