@@ -614,7 +614,7 @@ export default function InsightsPage() {
                                 <ReTooltip
                                   contentStyle={{ fontSize: 11, borderRadius: 8 }}
                                   labelStyle={{ fontSize: 11 }}
-                                  formatter={(value: number | string) => String(value)}
+                                  formatter={(value: unknown) => String(value)}
                                 />
                                 <Line
                                   type="monotone"

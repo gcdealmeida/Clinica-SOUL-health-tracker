@@ -182,7 +182,7 @@ function examRecords(exams: unknown[]): UnifiedRecord[] {
   )
 }
 
-function medicationRecords(items: Medication[]): UnifiedRecord[] {
+function medicationRecords(items: (Medication & { created?: string })[]): UnifiedRecord[] {
   return items.map((m) =>
     record({
       id: `med-${m.id}`,
@@ -330,10 +330,13 @@ export async function listAllRecords(): Promise<UnifiedRecord[]> {
     pb.collection('emotional_logs').getFullList({ filter: userFilter, sort: '-created' }),
   ])
 
+  // Os mappers tipam seus modelos específicos (HealthMetric, Meal etc.); os
+  // resultados brutos do PocketBase chegam como RecordModel[], então o array
+  // é tratado como any[] aqui para não violar a contravariância de parâmetros.
   const arr = (
     fn: PromiseSettledResult<unknown[]>,
-    mapper: (items: unknown[]) => UnifiedRecord[],
-  ): UnifiedRecord[] => (fn.status === 'fulfilled' ? mapper(fn.value) : [])
+    mapper: (items: never[]) => UnifiedRecord[],
+  ): UnifiedRecord[] => (fn.status === 'fulfilled' ? mapper(fn.value as never[]) : [])
 
   const all: UnifiedRecord[] = [
     ...arr(results[0], metricRecords),
