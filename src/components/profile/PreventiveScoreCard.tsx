@@ -298,6 +298,13 @@ const PillarSummaryCard: React.FC<PillarSummaryCardProps> = ({
   )
 }
 
+const ITEM_STATUS_LABEL: Record<PillarItem['status'], string> = {
+  cumprido: 'Cumprido',
+  parcial: 'Parcial',
+  atrasado: 'Atrasado',
+  'sem dados': 'Sem dados',
+}
+
 interface PillarDetailAccordionProps {
   pillar: PillarScore
   isOpen: boolean
@@ -369,14 +376,41 @@ const PillarDetailAccordion: React.FC<PillarDetailAccordionProps> = ({
                     )}
                     {item.title}
                   </span>
-                  {item.valueLabel && (
-                    <Badge variant="outline" className="text-[10px] shrink-0 font-medium">
-                      {item.valueLabel}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {item.valueLabel && (
+                      <Badge variant="outline" className="text-[10px] font-medium">
+                        {item.valueLabel}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] font-semibold ${
+                        item.points >= item.maxPoints
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : item.points > 0
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {item.points.toFixed(1)}/{item.maxPoints} pts
                     </Badge>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
+                  <span className="font-semibold text-foreground/80">
+                    {ITEM_STATUS_LABEL[item.status]}
+                  </span>
+                  {item.maxPoints - item.points > 0 && (
+                    <span className="text-muted-foreground">
+                      · perdeu {(item.maxPoints - item.points).toFixed(1)} pts
+                    </span>
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   {item.description}
+                </p>
+                <p className="text-[10px] text-muted-foreground/90 leading-relaxed">
+                  <span className="font-semibold">Base oficial:</span> {item.reference}
                 </p>
                 <div className="flex items-center justify-between pt-0.5">
                   {item.recommendation ? (
