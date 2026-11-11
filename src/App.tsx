@@ -18,6 +18,9 @@ import AiAnalysesPage from '@/pages/AiAnalyses'
 import MetricDetailPage from '@/pages/MetricDetail'
 import ProfilePage from '@/pages/Profile'
 import BiomarkersPanelPage from '@/pages/BiomarkersPanel'
+import InsightsPage from '@/pages/Insights'
+import RecordsPage from '@/pages/Records'
+import SourcesPage from '@/pages/Sources'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
 import NotFound from '@/pages/NotFound'
 
@@ -37,6 +40,9 @@ export default function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/biomarcadores" element={<BiomarkersPanelPage />} />
+              <Route path="/insights" element={<InsightsPage />} />
+              <Route path="/records" element={<RecordsPage />} />
+              <Route path="/sources" element={<SourcesPage />} />
               <Route path="/registrar" element={<RegisterMetricPage />} />
               <Route path="/exames-dietas" element={<ExamsAndDietsPage />} />
               <Route path="/medicamentos" element={<MedicationsPage />} />

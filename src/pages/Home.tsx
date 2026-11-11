@@ -32,6 +32,7 @@ import {
   Droplets,
   Coffee,
   ClipboardList,
+  FileText,
   Pill,
 } from 'lucide-react'
 import {
@@ -220,6 +221,8 @@ export default function HomePage() {
                 label="Sintomas"
                 onClick={() => navigate('/registrar?category=sintoma')}
               />
+              <QuickBtn icon={FileText} label="Exames" onClick={() => navigate('/exames-dietas')} />
+              <QuickBtn icon={Smile} label="Diário" onClick={() => navigate('/diario-emocional')} />
               <QuickBtn icon={Plus} label="Add" onClick={() => navigate('/registrar')} />
             </div>
           </div>

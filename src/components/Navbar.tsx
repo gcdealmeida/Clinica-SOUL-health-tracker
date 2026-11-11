@@ -1,17 +1,13 @@
-import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import {
   CalendarDays,
-  PlusCircle,
-  FileText,
-  UtensilsCrossed,
-  HeartPulse,
-  Sparkles,
-  Users,
   UserCheck,
-  Activity,
+  Lightbulb,
   FlaskConical,
+  FolderOpen,
+  Database,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UserMenuDropdown } from '@/components/menu/UserMenuDropdown'
@@ -24,15 +20,16 @@ export function Navbar({ currentTab }: NavbarProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  // Navegação superior enxuta (padrão Guava): 6 destinos.
+  // Registrar, Exames & Dietas, Refeições e Diário Emocional continuam com
+  // suas rotas e são acessados a partir do Painel (quick actions/cards).
   const navItems = [
-    { to: '/', label: 'Hoje', icon: CalendarDays },
+    { to: '/', label: 'Painel', icon: CalendarDays },
     { to: '/profile', label: 'Profile', icon: UserCheck },
+    { to: '/insights', label: 'Insights', icon: Lightbulb },
     { to: '/biomarcadores', label: 'Biomarcadores', icon: FlaskConical },
-    { to: '/registrar', label: 'Registrar', icon: PlusCircle },
-    { to: '/exames-dietas', label: 'Exames & Dietas', icon: FileText },
-    { to: '/refeicoes', label: 'Refeições (IA)', icon: UtensilsCrossed },
-    { to: '/diario-emocional', label: 'Diário Emocional', icon: HeartPulse },
-    { to: '/analises', label: 'Análises IA', icon: Sparkles },
+    { to: '/records', label: 'Records', icon: FolderOpen },
+    { to: '/sources', label: 'Sources', icon: Database },
   ]
 
   if (user?.role === 'profissional') {
@@ -46,7 +43,16 @@ export function Navbar({ currentTab }: NavbarProps) {
         <div className="flex items-center gap-3">
           <NavLink to="/" className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md">
-              <Activity className="h-5 w-5" />
+              <CalendarDays className="h-5 w-5 hidden" />
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 3c3 4 6 6.5 6 10a6 6 0 0 1-12 0c0-3.5 3-6 6-10Z" />
+              </svg>
             </div>
             <div>
               <span className="font-semibold text-lg tracking-tight text-foreground flex items-center gap-1.5">
