@@ -179,6 +179,26 @@ export interface MedicalRecord {
   updated: string
 }
 
+export type SleepStatus = 'bom' | 'medio' | 'ruim'
+export type PhysicalActivityStatus = 'muito_otimo' | 'mais_ou_menos' | 'pouco' | 'nada'
+export type NutritionStatus = 'otima' | 'boa' | 'razoavel' | 'ruim' | 'pessima'
+export type HighMedLowStatus = 'alta' | 'media' | 'baixa'
+export type SocialStatus = 'alta' | 'mais_ou_menos' | 'pouco' | 'nada'
+
+export interface LifeAspectRatings {
+  espiritual?: number // 0 a 100
+  parentes?: number
+  conjugal?: number
+  filhos?: number
+  social?: number
+  saude?: number
+  servir?: number
+  intelectual?: number
+  financeiro?: number
+  profissional?: number
+  emocional?: number
+}
+
 export interface EmotionalLog {
   id: string
   user: string
@@ -187,8 +207,21 @@ export interface EmotionalLog {
   mood_label: string
   affecting_factors?: string
   notes?: string
-  energy_level?: number
-  stress_level?: number
+  energy_level?: number // 1 a 5
+  stress_level?: number // 1 a 5
+  emotions?: string[] // tags das emoções selecionadas
+  sleep_status?: SleepStatus | string
+  physical_activity?: PhysicalActivityStatus | string
+  nutrition?: NutritionStatus | string
+  social_status?: SocialStatus | string
+  family_status?: HighMedLowStatus | string
+  partner_status?: HighMedLowStatus | string
+  hobbies_status?: HighMedLowStatus | string
+  spirituality_status?: HighMedLowStatus | string
+  intellect_status?: HighMedLowStatus | string
+  service_status?: HighMedLowStatus | string
+  financial_status?: HighMedLowStatus | string
+  life_aspects?: LifeAspectRatings
   created: string
   updated: string
 }

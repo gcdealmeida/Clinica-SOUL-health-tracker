@@ -1,0 +1,299 @@
+import React, { useState } from 'react'
+import { EmotionalLog } from '@/types'
+import {
+  LifeAspectKey,
+  LIFE_ASPECTS,
+  filterLogsByPeriod,
+  computeAspectAverages,
+  PeriodFilter,
+} from '@/lib/emotionalDaylio'
+import { AspectGaugeCard } from './AspectGaugeCard'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts'
+import { Sparkles, Calendar, TrendingUp, Compass, Award } from 'lucide-react'
+
+interface Life360ViewProps {
+  logs: EmotionalLog[]
+  onOpenCheckin?: () => void
+}
+
+export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin }) => {
+  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month')
+  const [selectedAspect, setSelectedAspect] = useState<LifeAspectKey | null>(null)
+
+  const filteredLogs = filterLogsByPeriod(logs, period)
+  const aspectAverages = computeAspectAverages(filteredLogs)
+
+  const scoreByKey: Record<LifeAspectKey, number> = {} as any
+  aspectAverages.forEach((item) => {
+    scoreByKey[item.aspect.key] = item.score
+  })
+
+  // Radar data
+  const radarData = LIFE_ASPECTS.map((aspect) => ({
+    subject: aspect.title.split(' ')[0],
+    fullName: aspect.title,
+    score: scoreByKey[aspect.key] ?? 0,
+    fullMark: 100,
+  }))
+
+  // Score global (média de todos os 11 aspectos)
+  const allScores = aspectAverages.map((a) => a.score)
+  const globalScore = allScores.length
+    ? Math.round(allScores.reduce((acc, v) => acc + v, 0) / allScores.length)
+    : 0
+
+  // Melhor aspecto e aspecto que mais precisa de atenção
+  const sortedAspects = [...aspectAverages].sort((a, b) => b.score - a.score)
+  const bestAspect = sortedAspects[0]?.aspect
+  const bestAspectScore = sortedAspects[0]?.score ?? 0
+  const attentionAspect = sortedAspects[sortedAspects.length - 1]?.aspect
+  const attentionAspectScore = sortedAspects[sortedAspects.length - 1]?.score ?? 0
+
+  // Linha do tempo dos últimos registros para gráfico de evolução
+  const timelineData = [...filteredLogs]
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+    .slice(-14)
+    .map((log) => ({
+      date: (log.date || '').slice(5, 10),
+      humor: (log.mood_score || 3) * 20,
+      energia: (log.energy_level || 3) * 20,
+      estresse: (6 - (log.stress_level || 3)) * 20, // invertido para quanto maior, melhor
+    }))
+
+  const periodLabels: Record<'day' | 'week' | 'month' | 'year', { title: string; desc: string }> = {
+    day: { title: 'Hoje', desc: 'Percepção imediata do dia' },
+    week: { title: 'Últimos 7 dias', desc: 'Média e equilíbrio da última semana' },
+    month: { title: 'Últimos 30 dias', desc: 'Tendência consolidada do mês' },
+    year: { title: 'Último ano', desc: 'Visão macro e consistência anual' },
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Seletor de Período 360º: Diário / Semanal / Mensal / Anual */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-3xl bg-card border border-border/70 shadow-sm">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="p-2 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400">
+              <Compass className="w-5 h-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                Avaliação da Vida 360º — {periodLabels[period].title}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {periodLabels[period].desc} • Baseado em {filteredLogs.length} registro(s)
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pílulas de Seleção de Período */}
+        <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/50 self-stretch sm:self-auto justify-between">
+          {(
+            [
+              { id: 'day', label: 'Diário' },
+              { id: 'week', label: 'Semanal' },
+              { id: 'month', label: 'Mensal' },
+              { id: 'year', label: 'Anual' },
+            ] as const
+          ).map((p) => {
+            const active = period === p.id
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPeriod(p.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  active
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Cards de Resumo & Gráfico Radar */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Painel Radar de Equilíbrio */}
+        <Card className="rounded-3xl border-border/70 shadow-sm lg:col-span-2 flex flex-col justify-between">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-violet-600" />
+                  Roda da Vida 360º (11 Aspectos)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Distribuição de energia e dedicação nos 11 pilares
+                </CardDescription>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-foreground">{globalScore}%</span>
+                <span className="text-[10px] block font-semibold text-muted-foreground">
+                  Índice Global 360º
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={radarData} outerRadius="75%">
+                  <PolarGrid stroke="currentColor" className="text-muted/30" />
+                  <PolarAngleAxis
+                    dataKey="subject"
+                    tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 600 }}
+                    className="text-foreground"
+                  />
+                  <PolarRadiusAxis
+                    angle={30}
+                    domain={[0, 100]}
+                    tick={{ fontSize: 9 }}
+                    stroke="currentColor"
+                    className="text-muted-foreground/50"
+                  />
+                  <Radar
+                    name="Equilíbrio"
+                    dataKey="score"
+                    stroke="#8b5cf6"
+                    fill="#8b5cf6"
+                    fillOpacity={0.4}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-2 pt-3 border-t border-border/50">
+              {bestAspect && (
+                <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50">
+                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
+                    Pilar mais Forte
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-base">{bestAspect.emoji}</span>
+                    <span className="text-xs font-bold text-foreground">{bestAspect.title}</span>
+                    <span className="text-xs font-black text-emerald-600 ml-auto">
+                      {bestAspectScore}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {attentionAspect && (
+                <div className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/50">
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider block">
+                    Ponto de Atenção
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-base">{attentionAspect.emoji}</span>
+                    <span className="text-xs font-bold text-foreground">
+                      {attentionAspect.title}
+                    </span>
+                    <span className="text-xs font-black text-amber-600 ml-auto">
+                      {attentionAspectScore}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card Lateral: Destaques & Ação */}
+        <Card className="rounded-3xl border-border/70 shadow-sm flex flex-col justify-between">
+          <CardHeader>
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Award className="w-4 h-4 text-emerald-600" />
+              Diretriz Clínica Soul
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Equilíbrio integral entre corpo, mente, relações e propósito
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs text-muted-foreground leading-relaxed">
+            <p>
+              A verdadeira saúde preventiva vai muito além de exames de sangue e pesagem. Ela se
+              ancora na harmonia dos <strong>11 aspectos da sua vida</strong>.
+            </p>
+            <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/50 space-y-2">
+              <span className="text-[11px] font-bold text-foreground block">
+                💡 Como interpretar sua Vida 360º:
+              </span>
+              <ul className="space-y-1.5 text-[11px]">
+                <li>
+                  • <strong>80-100%:</strong> Pilar nutrido e resiliente.
+                </li>
+                <li>
+                  • <strong>50-79%:</strong> Equilibrado com oportunidades de melhora.
+                </li>
+                <li>
+                  • <strong>Abaixo de 50%:</strong> Sugere sobrecarga ou afastamento.
+                </li>
+              </ul>
+            </div>
+
+            {onOpenCheckin && (
+              <Button
+                onClick={onOpenCheckin}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl h-11 shadow-sm gap-2 mt-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Fazer Check-in de Hoje
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Grid com os 11 Aspectos da Vida — Cards ilustrativos carinhosos */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Os 11 Aspectos da Vida 360º
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Cada aspecto com sua medição ilustrada e descrição específica
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-muted-foreground">
+            {periodLabels[period].title}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {LIFE_ASPECTS.map((aspect) => {
+            const score = scoreByKey[aspect.key] ?? 0
+            return (
+              <AspectGaugeCard
+                key={aspect.key}
+                aspect={aspect}
+                score={score}
+                subtext={`Média no período: ${score}% (${filteredLogs.length} registros)`}
+              />
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
