@@ -23,6 +23,13 @@ import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/p
 
 import { BasicInfoSection } from '@/components/profile/BasicInfoSection'
 import { PreventiveScoreCard } from '@/components/profile/PreventiveScoreCard'
+import {
+  ProfileOverviewHeader,
+  InitialProfileData,
+} from '@/components/profile/ProfileOverviewHeader'
+import { emotionalService } from '@/services/emotional'
+import { computeEmotionalScore, EmotionalScoreSummary } from '@/lib/emotionalMetrics'
+import { EmotionalLog } from '@/types'
 import { MedicationsSupplementsSection } from '@/components/profile/MedicationsSupplementsSection'
 import { BiomarkersSection } from '@/components/profile/BiomarkersSection'
 import {
@@ -99,6 +106,7 @@ export const ProfilePage: React.FC = () => {
   const [medications, setMedications] = useState<Medication[]>([])
   const [metrics, setMetrics] = useState<HealthMetric[]>([])
   const [exams, setExams] = useState<Exam[]>([])
+  const [emotionalLogs, setEmotionalLogs] = useState<EmotionalLog[]>([])
 
   const loadAllData = useCallback(
     async (isRefresh = false) => {
@@ -120,6 +128,7 @@ export const ProfilePage: React.FC = () => {
           medsData,
           metricsData,
           examsData,
+          emoData,
         ] = await Promise.all([
           profileService.getBasicProfile(user.id),
           profileService.getBiomarkers(user.id),
@@ -133,6 +142,7 @@ export const ProfilePage: React.FC = () => {
           medicationService.list().catch(() => []),
           healthService.listUserMetrics(user.id, 200).catch(() => []),
           medicalService.listExams(user.id).catch(() => []),
+          emotionalService.listLogs(user.id, 60).catch(() => []),
         ])
 
         setBasicProfile(basicData)
@@ -147,6 +157,7 @@ export const ProfilePage: React.FC = () => {
         setMedications(medsData)
         setMetrics(metricsData)
         setExams(examsData)
+        setEmotionalLogs(emoData)
       } catch (err: any) {
         toast({
           title: 'Erro ao carregar perfil',
@@ -202,6 +213,62 @@ export const ProfilePage: React.FC = () => {
       userGender: basicProfile?.gender,
     })
   }, [metrics, exams, biomarkers, lifestyle, vaccinations, age, basicProfile?.gender])
+
+  // Recálculo dinâmico do Score do Diário Emocional (0 a 10)
+  const emotionalScoreResult: EmotionalScoreSummary = useMemo(() => {
+    return computeEmotionalScore(emotionalLogs)
+  }, [emotionalLogs])
+
+  // Busca as métricas corporais mais recentes de peso, gordura % e massa magra
+  const latestBodyMetrics = useMemo(() => {
+    const weightMetrics = metrics
+      .filter((m) => m.category === 'peso')
+      .sort((a, b) => (b.date_time || '').localeCompare(a.date_time || ''))
+
+    const latestWithWeight = weightMetrics.find(
+      (m) => typeof m.numeric_value === 'number' && m.numeric_value > 0,
+    )
+    const latestWithFat = weightMetrics.find(
+      (m) => typeof m.body_fat_pct === 'number' && m.body_fat_pct > 0,
+    )
+    const latestWithLean = weightMetrics.find(
+      (m) => typeof m.lean_mass_kg === 'number' && m.lean_mass_kg > 0,
+    )
+
+    return {
+      weightKg: latestWithWeight?.numeric_value ?? basicProfile?.weightKg ?? null,
+      bodyFatPct: latestWithFat?.body_fat_pct ?? null,
+      leanMassKg: latestWithLean?.lean_mass_kg ?? null,
+    }
+  }, [metrics, basicProfile?.weightKg])
+
+  // Objeto unificado de dados iniciais para o topo
+  const initialData: InitialProfileData = useMemo(() => {
+    return {
+      name: basicProfile?.name || user?.name || '',
+      email: user?.email || '',
+      age,
+      gender: basicProfile?.gender || '',
+      weightKg: latestBodyMetrics.weightKg,
+      heightCm: basicProfile?.heightCm ?? null,
+      bodyFatPct: latestBodyMetrics.bodyFatPct,
+      leanMassKg: latestBodyMetrics.leanMassKg,
+      bloodType: basicProfile?.bloodType || '',
+    }
+  }, [basicProfile, user, age, latestBodyMetrics])
+
+  const handleOpenBasicInfo = () => {
+    setActiveTab('basic')
+    // Suave scroll para a seção se necessário
+    const el = document.getElementById('basic-info-anchor')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
+  const handleOpenEmotionalDiary = () => {
+    navigate('/diario-emocional')
+  }
 
   // Handlers para Basic Info
   const handleSaveBasic = async (patch: Partial<UserBasicProfile>) => {
@@ -316,70 +383,17 @@ export const ProfilePage: React.FC = () => {
       <Navbar currentTab="Profile" />
 
       <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Cabeçalho do Perfil (Estilo Guava) */}
-        <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card to-primary/5 p-5 md:p-6 shadow-xs">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-primary/80 to-primary text-primary-foreground font-bold text-xl md:text-2xl flex items-center justify-center shadow-inner shrink-0">
-                {avatarInitials}
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-                    {basicProfile?.name || user?.name || 'Meu Perfil'}
-                  </h1>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
-                    <ShieldCheck className="w-3 h-3" />
-                    Paciente Soul
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-
-                {/* Badges biométricos rápidos */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                  {age !== null && (
-                    <span className="px-2 py-0.5 rounded-md bg-muted/60 text-foreground font-medium">
-                      {age} anos
-                    </span>
-                  )}
-                  {basicProfile?.gender && (
-                    <span className="px-2 py-0.5 rounded-md bg-muted/60 text-foreground font-medium">
-                      {basicProfile.gender}
-                    </span>
-                  )}
-                  {basicProfile?.heightCm && (
-                    <span className="px-2 py-0.5 rounded-md bg-muted/60 text-foreground font-medium">
-                      {basicProfile.heightCm} cm
-                    </span>
-                  )}
-                  {basicProfile?.weightKg && (
-                    <span className="px-2 py-0.5 rounded-md bg-muted/60 text-foreground font-medium">
-                      {basicProfile.weightKg} kg
-                    </span>
-                  )}
-                  {basicProfile?.bloodType && (
-                    <span className="px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-bold">
-                      {basicProfile.bloodType}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => loadAllData(true)}
-                disabled={refreshing}
-                className="gap-1.5 text-xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-                Atualizar Dados
-              </Button>
-            </div>
-          </div>
-        </div>
+        {/* Card de Dados Iniciais no Topo + Dois Scores Lado a Lado (Estilo Guava) */}
+        <ProfileOverviewHeader
+          initialData={initialData}
+          preventiveScore={scoreResult}
+          emotionalScore={emotionalScoreResult}
+          avatarInitials={avatarInitials}
+          refreshing={refreshing}
+          onRefresh={() => loadAllData(true)}
+          onOpenBasicInfo={handleOpenBasicInfo}
+          onOpenEmotionalDiary={handleOpenEmotionalDiary}
+        />
 
         {/* Navegação horizontal de abas das 10 seções */}
         <div className="border-b border-border/80">
@@ -416,7 +430,7 @@ export const ProfilePage: React.FC = () => {
           <div className="space-y-6">
             {/* 1. BASIC INFO (inclui o Preventive Health Score com destaque) */}
             {activeTab === 'basic' && (
-              <div className="space-y-6">
+              <div id="basic-info-anchor" className="space-y-6 scroll-mt-20">
                 <PreventiveScoreCard
                   scoreData={scoreResult}
                   onNavigateTab={(tabId) => setActiveTab(tabId as ProfileTab)}
