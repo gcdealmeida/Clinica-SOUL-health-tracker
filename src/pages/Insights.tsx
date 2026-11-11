@@ -35,6 +35,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { aiAnalysisService } from '@/services/mealsAndAi'
 import type { HealthMetric, EmotionalLog } from '@/types'
 
 /**
@@ -311,19 +312,10 @@ export default function InsightsPage() {
         const avg = vals.reduce((s, v) => s + v, 0) / vals.length
         return `${label}: ${vals.length} dia(s) registrado(s), média ${avg.toFixed(1)}, mínimo ${Math.min(...vals).toFixed(1)}, máximo ${Math.max(...vals).toFixed(1)} (último: ${days[days.length - 1]} = ${vals[vals.length - 1]}).`
       }
-      const res = await fetch('/backend/v1/ai/analyze-correlations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: pb.authStore.token,
-        },
-        body: JSON.stringify({
-          variables: [selectedA, selectedB],
-          question: `Correlação de Pearson calculada pelo app: r=${Number.isNaN(correlation.r) ? 'indefinido' : correlation.r.toFixed(2)} entre ${correlation.labelA} e ${correlation.labelB} (${correlation.pairs} dias em comum, últimos ${periodDays} dias). Resumos: ${summarize(seriesOf(selectedA), correlation.labelA)} ${summarize(seriesOf(selectedB), correlation.labelB)}`,
-        }),
+      const data = await aiAnalysisService.runCorrelationAnalysis({
+        variables: [selectedA, selectedB],
+        question: `Correlação de Pearson calculada pelo app: r=${Number.isNaN(correlation.r) ? 'indefinido' : correlation.r.toFixed(2)} entre ${correlation.labelA} e ${correlation.labelB} (${correlation.pairs} dias em comum, últimos ${periodDays} dias). Resumos: ${summarize(seriesOf(selectedA), correlation.labelA)} ${summarize(seriesOf(selectedB), correlation.labelB)}`,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
       setAiText(data.insights || 'A IA não retornou conteúdo.')
       toast.success('Análise com IA concluída')
       setTimeout(
@@ -625,7 +617,7 @@ export default function InsightsPage() {
                                   formatter={(value: number | string) => String(value)}
                                 />
                                 <Line
-                                  type="scatter"
+                                  type="monotone"
                                   dataKey="y"
                                   stroke="none"
                                   fill="#059669"

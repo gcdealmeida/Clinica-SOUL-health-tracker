@@ -1,15 +1,13 @@
 import pb from '@/lib/pocketbase/client'
+import type { Medication } from '@/services/medications'
 import type {
   HealthMetric,
-  Medication,
-  MedicationRoutine,
   ProfileBiomarker,
   ProfileCondition,
   ProfileVaccination,
   ProfileEvent,
   EmotionalLog,
   Meal,
-  SymptomLog,
 } from '@/types'
 import {
   Activity,
@@ -189,7 +187,7 @@ function medicationRecords(items: Medication[]): UnifiedRecord[] {
     record({
       id: `med-${m.id}`,
       title: m.name,
-      subtitle: m.dosage ? `${m.dosage}${m.frequency ? ` • ${m.frequency}` : ''}` : m.frequency,
+      subtitle: m.dosage,
       origin: 'Medicamento/suplemento',
       date: m.created || new Date().toISOString(),
       source: 'manual',
@@ -204,7 +202,7 @@ function vaccinationRecords(items: ProfileVaccination[]): UnifiedRecord[] {
   return items.map((v) =>
     record({
       id: `vac-${v.id}`,
-      title: v.vaccine_name || v.name || 'Vacina',
+      title: v.vaccine || 'Vacina',
       origin: 'Vacina registrada',
       date: v.date || v.created || new Date().toISOString(),
       source: 'manual',
@@ -219,7 +217,7 @@ function conditionRecords(items: ProfileCondition[]): UnifiedRecord[] {
   return items.map((c) =>
     record({
       id: `cond-${c.id}`,
-      title: c.condition || c.name || 'Condição',
+      title: c.title || 'Condição',
       origin: 'Condição de saúde',
       date: c.created || new Date().toISOString(),
       source: 'manual',
@@ -234,12 +232,12 @@ function eventRecords(items: ProfileEvent[]): UnifiedRecord[] {
   return items.map((e) =>
     record({
       id: `event-${e.id}`,
-      title: e.title || e.event_name || 'Procedimento/Consulta',
-      subtitle: e.notes,
-      origin: e.event_type === 'consulta' ? 'Consulta' : 'Procedimento',
+      title: e.title || 'Procedimento/Consulta',
+      subtitle: e.description,
+      origin: e.category === 'consulta' ? 'Consulta' : 'Procedimento',
       date: e.date || e.created || new Date().toISOString(),
       source: 'manual',
-      category: e.event_type === 'consulta' ? 'encounters' : 'procedures',
+      category: e.category === 'consulta' ? 'encounters' : 'procedures',
       navigateTo: '/profile',
       withTime: false,
     }),
@@ -266,10 +264,10 @@ function mealRecords(items: Meal[]): UnifiedRecord[] {
   return items.map((m) =>
     record({
       id: `meal-${m.id}`,
-      title: m.name || m.description || 'Refeição',
+      title: m.title || 'Refeição',
       origin: 'Refeição registrada',
       date: m.date_time || m.created || new Date().toISOString(),
-      source: m.image ? 'upload' : 'manual',
+      source: m.photo || m.photo_url ? 'upload' : 'manual',
       category: 'social_history',
       navigateTo: '/refeicoes',
       withTime: true,
@@ -277,12 +275,12 @@ function mealRecords(items: Meal[]): UnifiedRecord[] {
   )
 }
 
-function symptomRecords(items: SymptomLog[]): UnifiedRecord[] {
+function symptomRecords(items: HealthMetric[]): UnifiedRecord[] {
   return items.map((s) =>
     record({
       id: `sym-${s.id}`,
-      title: s.symptom_name || s.name || 'Sintoma',
-      subtitle: s.severity != null ? `Intensidade: ${s.severity}/10` : undefined,
+      title: s.text_value || 'Sintoma',
+      subtitle: s.numeric_value != null ? `Intensidade: ${s.numeric_value}/10` : undefined,
       origin: 'Sintoma registrado',
       date: s.date_time || s.created || new Date().toISOString(),
       source: 'manual',
@@ -325,7 +323,10 @@ export async function listAllRecords(): Promise<UnifiedRecord[]> {
     pb.collection('profile_events').getFullList({ filter: userFilter, sort: '-created' }),
     pb.collection('profile_biomarkers').getFullList({ filter: userFilter, sort: '-created' }),
     pb.collection('meals').getFullList({ filter: userFilter, sort: '-created' }),
-    pb.collection('symptom_logs').getFullList({ filter: userFilter, sort: '-created' }),
+    pb.collection('health_metrics').getFullList({
+      filter: `${userFilter} && category = 'sintoma'`,
+      sort: '-created',
+    }),
     pb.collection('emotional_logs').getFullList({ filter: userFilter, sort: '-created' }),
   ])
 
