@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WEARABLE_SERVICES } from '@/components/menu/wearableServicesData'
+import ExamUploadSection from '@/components/sources/ExamUploadSection'
 
 /**
  * Página Sources (padrão Guava): Devices & Apps com passo a passo de
@@ -39,6 +40,9 @@ export default function SourcesPage() {
             De onde vêm seus dados: dispositivos, apps de saúde e sua equipe.
           </p>
         </div>
+
+        {/* Upload Files / Downloads Exames */}
+        <ExamUploadSection />
 
         {/* Devices & Apps */}
         <Card>
