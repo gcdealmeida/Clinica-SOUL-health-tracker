@@ -912,14 +912,30 @@ routerAdd(
       return e.badRequestError('Nenhuma imagem de página do exame foi enviada para análise.')
     }
 
-    // Limite de páginas por requisição para não estourar memória do JSVM
+    // Limite interno de segurança do JSVM por requisição (o app envia em lotes
+    // menores que isso via partial_batch; mantém compat com clientes antigos).
     const MAX_PAGES = 5
     if (images.length > MAX_PAGES) {
       images = images.slice(0, MAX_PAGES)
     }
 
+    // Modo lote parcial: o app envia o laudo em várias requisições (uma por
+    // grupo de páginas). Em lotes intermediários (partial_batch=true) a IA
+    // extrai SOMENTE o que está nas páginas enviadas e o hook NÃO grava nada
+    // — apenas devolve o material bruto para consolidação no último lote.
+    const isPartialBatch = data && data.partial_batch === true
+    const batchIndex = data && typeof data.batch_index === 'number' ? data.batch_index : 0
+    const batchTotal = data && typeof data.batch_total === 'number' ? data.batch_total : 1
+    const previousBiomarkers =
+      data && Array.isArray(data.previous_biomarkers) ? data.previous_biomarkers : []
+    const previousSummary =
+      data && typeof data.previous_summary === 'string' ? data.previous_summary : ''
+
     const systemPrompt =
       'Você é um médico patologista clínico e especialista em medicina diagnóstica da Clínica Soul com visão computacional de alta precisão. ' +
+      (isPartialBatch
+        ? 'Você está processando UM LOTE de páginas de um laudo maior, em conjunto com resultados já extraídos de lotes anteriores enviados no texto. '
+        : '') +
       'Você receberá páginas digitalizadas/fotos em alta nitidez de um laudo de exame (pode ser laboratorial — Hemograma completo, Perfil Lipídico, Bioquímica, Hormônios — ou de imagem: Ressonância, Tomografia, Ultrassom, Endoscopia, Eletrocardiograma, Raio-X etc.). ' +
       'Antes de extrair, IDENTIFIQUE sozinho do que o documento se trata e preencha "exam_title" e "exam_type" de acordo (ex: "Hemograma Completo", "Perfil Lipídico", "Ressonância Magnética de Lombar", "Endoscopia Digestiva Alta"). ' +
       'Se for um laudo de imagem/imagemológica, extraia como "biomarkers" apenas os achados mensuráveis citados (medidas, graus, dimensões), e capriche no "summary_text" com a conclusão do radiologista. ' +
@@ -957,6 +973,20 @@ routerAdd(
       '  ]\n' +
       '}'
 
+    const previousBiomarkersText =
+      isPartialBatch && previousBiomarkers.length > 0
+        ? '\n\nMARCADORES JÁ EXTRAÍDOS EM PARTES ANTERIORES (não repita nenhum destes):\n' +
+          previousBiomarkers
+            .map(function (b) {
+              return '- ' + (b && b.name ? b.name : '')
+            })
+            .join('\n')
+        : ''
+    const previousSummaryText =
+      isPartialBatch && previousSummary
+        ? '\n\nRESUMO PARCIAL DAS PARTES ANTERIORES (continue a partir dele):\n' + previousSummary
+        : ''
+
     const examTitleHint = examRecord
       ? examRecord.getString('title')
       : data.title || 'Exame de Sangue / Laboratorial'
@@ -965,11 +995,20 @@ routerAdd(
       images.length +
       ' página(s) deste laudo de exame laboratorial (' +
       examTitleHint +
-      '). Extraia a LISTA COMPLETA de resultados: todas as linhas de analises do laudo, incluindo marcadores fora de qualquer catálogo, com valores, unidades, referências — e elabore o resumo.'
+      '). Extraia a LISTA COMPLETA de resultados: todas as linhas de analises do laudo, incluindo marcadores fora de qualquer catálogo, com valores, unidades, referências — e elabore o resumo.' +
+      (isPartialBatch
+        ? ' ESTA É A PÁGINA ' +
+          (batchIndex + 1) +
+          ' DE ' +
+          batchTotal +
+          ' DO LAUDO (leitura em partes): extraia SOMENTE as linhas visíveis nestas imagens, sem repetir marcadores de partes anteriores e sem inventar linhas que não estão visíveis.'
+        : '')
 
     // Função interna para construir a mensagem multimodal com as imagens do exame
     const buildUserContent = (variant) => {
-      const parts = [{ type: 'text', text: promptIntro }]
+      const parts = [
+        { type: 'text', text: promptIntro + previousBiomarkersText + previousSummaryText },
+      ]
       for (let p = 0; p < images.length; p++) {
         const imgUrl = images[p]
         if (variant === 'string-url') {
@@ -1117,132 +1156,141 @@ routerAdd(
     const aiExamType =
       parsed.exam_type && typeof parsed.exam_type === 'string' ? parsed.exam_type.trim() : ''
 
-    // Detecta o tipo/área do exame pela IA e reflete no título do registro
-    // (Sources e Exames & Dietas leem deste campo). Só substitui o título
-    // genérico do upload quando a IA identifica algo mais específico.
-    if (examRecord && (aiExamTitle || aiExamType)) {
-      try {
-        const detectedType = aiExamType || aiExamTitle
-        examRecord.set('type', detectedType)
-        if (aiExamTitle && examRecord.getString('title') !== aiExamTitle) {
-          examRecord.set('title', aiExamTitle)
+    // Em lote parcial (lotes intermediários), NADA é gravado: o app consolida
+    // tudo e reenvia no último lote, que chega aqui com partial_batch ausente.
+    if (!isPartialBatch) {
+      // Detecta o tipo/área do exame pela IA e reflete no título do registro
+      // (Sources e Exames & Dietas leem deste campo). Só substitui o título
+      // genérico do upload quando a IA identifica algo mais específico.
+      if (examRecord && (aiExamTitle || aiExamType)) {
+        try {
+          const detectedType = aiExamType || aiExamTitle
+          examRecord.set('type', detectedType)
+          if (aiExamTitle && examRecord.getString('title') !== aiExamTitle) {
+            examRecord.set('title', aiExamTitle)
+          }
+          $app.save(examRecord)
+          console.log('analyze-exam: exame ' + examId + ' retitulado pela IA: ' + detectedType)
+        } catch (err) {
+          console.log('analyze-exam: erro ao salvar tipo/título detectado: ' + err.message)
         }
-        $app.save(examRecord)
-        console.log('analyze-exam: exame ' + examId + ' retitulado pela IA: ' + detectedType)
-      } catch (err) {
-        console.log('analyze-exam: erro ao salvar tipo/título detectado: ' + err.message)
       }
-    }
 
-    // 1. Atualiza o registro em exams se houver examId
-    if (examRecord) {
-      try {
-        if (summaryText) {
-          examRecord.set('summary_results', summaryText)
+      // 1. Atualiza o registro em exams se houver examId
+      if (examRecord) {
+        try {
+          if (summaryText) {
+            examRecord.set('summary_results', summaryText)
+          }
+          if (
+            overallStatus &&
+            (!examRecord.getString('status') || examRecord.getString('status') === 'pendente')
+          ) {
+            examRecord.set('status', overallStatus)
+          }
+          if (labName && !examRecord.getString('laboratory')) {
+            examRecord.set('laboratory', labName)
+          }
+          $app.save(examRecord)
+          console.log('analyze-exam: exame ' + examId + ' atualizado com summary_results')
+        } catch (err) {
+          console.log('analyze-exam: erro ao salvar exams.' + examId + ': ' + err.message)
         }
-        if (
-          overallStatus &&
-          (!examRecord.getString('status') || examRecord.getString('status') === 'pendente')
-        ) {
-          examRecord.set('status', overallStatus)
-        }
-        if (labName && !examRecord.getString('laboratory')) {
-          examRecord.set('laboratory', labName)
-        }
-        $app.save(examRecord)
-        console.log('analyze-exam: exame ' + examId + ' atualizado com summary_results')
-      } catch (err) {
-        console.log('analyze-exam: erro ao salvar exams.' + examId + ': ' + err.message)
       }
-    }
 
-    // 2. Grava ou atualiza os biomarcadores na coleção profile_biomarkers
-    // Busca biomarcadores já existentes do usuário para evitar duplicatas ou atualizar
-    const biomarkersCollection = biomarkersColOrNull()
-    let createdCount = 0
-    let updatedCount = 0
+      // 2. Grava ou atualiza os biomarcadores na coleção profile_biomarkers
+      // Busca biomarcadores já existentes do usuário para evitar duplicatas ou atualizar
+      const biomarkersCollection = biomarkersColOrNull()
+      let createdCount = 0
+      let updatedCount = 0
 
-    let existingBiomarkers = []
-    if (biomarkersCollection) {
-      try {
-        existingBiomarkers = $app.findRecordsByFilter(
-          'profile_biomarkers',
-          'user = {:user}',
-          '-date,-created',
-          500,
-          0,
-          { user: examUserId },
-        )
-      } catch (err) {
-        console.log('analyze-exam: erro ao buscar profile_biomarkers: ' + err.message)
-      }
-    }
-
-    const existingMap = new Map()
-    for (let m = 0; m < existingBiomarkers.length; m++) {
-      const rec = existingBiomarkers[m]
-      const nKey = normalizeKey(rec.getString('name'))
-      if (nKey && !existingMap.has(nKey)) {
-        existingMap.set(nKey, rec)
-      }
-    }
-
-    for (let j = 0; j < (biomarkersCollection ? validBiomarkers.length : 0); j++) {
-      const bio = validBiomarkers[j]
-      const normKey = normalizeKey(bio.name)
-      const existing = existingMap.get(normKey)
-
-      try {
-        if (existing) {
-          // Atualiza o registro se a data do exame for mais recente ou igual
-          existing.set('value', bio.value)
-          if (bio.unit) existing.set('unit', bio.unit)
-          if (bio.reference_range) existing.set('reference_range', bio.reference_range)
-          if (bio.status) existing.set('status', bio.status)
-          if (examDate) existing.set('date', examDate)
-          existing.set(
-            'notes',
-            'Atualizado automaticamente por IA a partir do exame ' +
-              (examRecord ? examRecord.getString('title') : ''),
+      let existingBiomarkers = []
+      if (biomarkersCollection) {
+        try {
+          existingBiomarkers = $app.findRecordsByFilter(
+            'profile_biomarkers',
+            'user = {:user}',
+            '-date,-created',
+            500,
+            0,
+            { user: examUserId },
           )
-          $app.save(existing)
-          updatedCount++
-        } else {
-          // Cria novo registro de biomarcador
-          const newRec = new Record(biomarkersCollection)
-          newRec.set('user', examUserId)
-          newRec.set('name', bio.name)
-          newRec.set('value', bio.value)
-          newRec.set('unit', bio.unit || '')
-          newRec.set('reference_range', bio.reference_range || '')
-          newRec.set('status', bio.status || 'otimo')
-          newRec.set('date', examDate)
-          newRec.set(
-            'notes',
-            'Extraído automaticamente por IA a partir do exame ' +
-              (examRecord ? examRecord.getString('title') : ''),
-          )
-          $app.save(newRec)
-          createdCount++
-          existingMap.set(normKey, newRec)
+        } catch (err) {
+          console.log('analyze-exam: erro ao buscar profile_biomarkers: ' + err.message)
         }
-      } catch (saveErr) {
-        console.log('analyze-exam: erro ao salvar biomarcador ' + bio.name + ': ' + saveErr.message)
       }
-    }
 
-    console.log(
-      'analyze-exam: CONCLUÍDO. Biomarcadores criados: ' +
-        createdCount +
-        ', atualizados: ' +
-        updatedCount +
-        ', total extraído: ' +
-        validBiomarkers.length,
-    )
+      const existingMap = new Map()
+      for (let m = 0; m < existingBiomarkers.length; m++) {
+        const rec = existingBiomarkers[m]
+        const nKey = normalizeKey(rec.getString('name'))
+        if (nKey && !existingMap.has(nKey)) {
+          existingMap.set(nKey, rec)
+        }
+      }
+
+      for (let j = 0; j < (biomarkersCollection ? validBiomarkers.length : 0); j++) {
+        const bio = validBiomarkers[j]
+        const normKey = normalizeKey(bio.name)
+        const existing = existingMap.get(normKey)
+
+        try {
+          if (existing) {
+            // Atualiza o registro se a data do exame for mais recente ou igual
+            existing.set('value', bio.value)
+            if (bio.unit) existing.set('unit', bio.unit)
+            if (bio.reference_range) existing.set('reference_range', bio.reference_range)
+            if (bio.status) existing.set('status', bio.status)
+            if (examDate) existing.set('date', examDate)
+            existing.set(
+              'notes',
+              'Atualizado automaticamente por IA a partir do exame ' +
+                (examRecord ? examRecord.getString('title') : ''),
+            )
+            $app.save(existing)
+            updatedCount++
+          } else {
+            // Cria novo registro de biomarcador
+            const newRec = new Record(biomarkersCollection)
+            newRec.set('user', examUserId)
+            newRec.set('name', bio.name)
+            newRec.set('value', bio.value)
+            newRec.set('unit', bio.unit || '')
+            newRec.set('reference_range', bio.reference_range || '')
+            newRec.set('status', bio.status || 'otimo')
+            newRec.set('date', examDate)
+            newRec.set(
+              'notes',
+              'Extraído automaticamente por IA a partir do exame ' +
+                (examRecord ? examRecord.getString('title') : ''),
+            )
+            $app.save(newRec)
+            createdCount++
+            existingMap.set(normKey, newRec)
+          }
+        } catch (saveErr) {
+          console.log(
+            'analyze-exam: erro ao salvar biomarcador ' + bio.name + ': ' + saveErr.message,
+          )
+        }
+      }
+
+      console.log(
+        'analyze-exam: CONCLUÍDO. Biomarcadores criados: ' +
+          createdCount +
+          ', atualizados: ' +
+          updatedCount +
+          ', total extraído: ' +
+          validBiomarkers.length,
+      )
+    } // fim do if (!isPartialBatch)
 
     return e.json(200, {
       success: true,
       exam_id: examId,
+      partial_batch: isPartialBatch,
+      batch_index: batchIndex,
+      batch_total: batchTotal,
       exam_title: aiExamTitle || examTitleHint,
       exam_type: aiExamType,
       exam_date: examDate,

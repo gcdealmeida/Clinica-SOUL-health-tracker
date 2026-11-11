@@ -29,7 +29,7 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react'
-import { prepareExamPagesForAi, analyzeExamWithAi } from '@/services/examReader'
+import { runExamAnalysisWithRetry } from '@/services/examReader'
 
 export default function ExamsAndDietsPage() {
   const { user } = useAuth()
@@ -108,23 +108,17 @@ export default function ExamsAndDietsPage() {
     setAnalyzingProgress('Carregando e renderizando documento...')
     try {
       toast.info('Iniciando leitura inteligente do exame com IA...')
-      // Renderiza as páginas do PDF ou imagem em canvas client-side
-      const pages = await prepareExamPagesForAi(exam.file, undefined, 1280, 0.9)
-      if (pages.length === 0) {
-        throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
-      }
-
-      setAnalyzingProgress(`Interpretando ${pages.length} página(s) com IA clínica...`)
-      const result = await analyzeExamWithAi({
+      setAnalyzingProgress(`Interpretando documento com IA clínica (retry adaptativo)...`)
+      const result = await runExamAnalysisWithRetry({
         examId: exam.id,
-        images: pages,
+        fileUrlOrFile: exam.file,
         title: exam.title,
-        fallbackSource: exam.file,
+        onProgress: setAnalyzingProgress,
       })
 
       if (result.success) {
         toast.success(
-          `Exame interpretado com sucesso! ${result.biomarkers_extracted} biomarcador(es) atualizado(s) no seu perfil.`,
+          `Exame interpretado! IA extraiu ${result.biomarkers_extracted} marcadores do laudo: ${result.biomarkers_created} novo(s) e ${result.biomarkers_updated} atualizado(s) em Biomarkers.`,
         )
       } else {
         toast.success('Exame processado pela IA.')
@@ -168,19 +162,16 @@ export default function ExamsAndDietsPage() {
       if (examFile && !examSummary) {
         toast.info('Arquivo anexado detectado: iniciando leitura automática com IA...')
         try {
-          const pages = await prepareExamPagesForAi(examFile, undefined, 1280, 0.9)
-          if (pages.length > 0) {
-            const aiRes = await analyzeExamWithAi({
-              examId: createdExam.id,
-              images: pages,
-              title: createdExam.title,
-              fallbackSource: examFile,
-            })
-            if (aiRes.biomarkers_extracted > 0) {
-              toast.success(
-                `IA transcreveu ${aiRes.biomarkers_extracted} biomarcadores automaticamente para a aba Biomarkers!`,
-              )
-            }
+          const aiRes = await runExamAnalysisWithRetry({
+            examId: createdExam.id,
+            fileUrlOrFile: examFile,
+            title: createdExam.title,
+            onProgress: (msg) => setAnalyzingProgress(msg),
+          })
+          if (aiRes.biomarkers_extracted > 0) {
+            toast.success(
+              `IA extraiu ${aiRes.biomarkers_extracted} marcadores do laudo: ${aiRes.biomarkers_created} novo(s) e ${aiRes.biomarkers_updated} atualizado(s) em Biomarkers.`,
+            )
           }
         } catch (aiErr: any) {
           console.warn('Leitura automática em segundo plano falhou:', aiErr)

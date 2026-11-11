@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { medicalService } from '@/services/medical'
-import { prepareExamPagesForAi, analyzeExamWithAi } from '@/services/examReader'
+import { runExamAnalysisWithRetry } from '@/services/examReader'
 import { Exam } from '@/types'
 import { todayStr } from '@/lib/localDate'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -87,19 +87,15 @@ export default function ExamUploadSection() {
     setAnalyzingId(exam.id)
     try {
       toast.info('Iniciando leitura inteligente do exame com IA...')
-      const pages = await prepareExamPagesForAi(exam.file, undefined, 1280, 0.9)
-      if (pages.length === 0) {
-        throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
-      }
-      const result = await analyzeExamWithAi({
+      const result = await runExamAnalysisWithRetry({
         examId: exam.id,
-        images: pages,
+        fileUrlOrFile: exam.file,
         title: exam.title,
-        fallbackSource: exam.file,
+        onProgress: (msg) => toast.info(msg),
       })
       if (result.success && result.biomarkers_extracted > 0) {
         toast.success(
-          `IA transcreveu ${result.biomarkers_extracted} biomarcador(es) para a área Biomarkers!`,
+          `IA extraiu ${result.biomarkers_extracted} marcador(es) do laudo: ${result.biomarkers_created} novo(s) em Biomarkers, ${result.biomarkers_updated} atualizado(s).`,
         )
       } else {
         toast.success('Exame processado pela IA: resumo do laudo atualizado.')
@@ -144,24 +140,22 @@ export default function ExamUploadSection() {
       if (fileInputRef.current) fileInputRef.current.value = ''
       toast.success('Exame enviado! Iniciando leitura automática com IA...')
 
-      // Leitura automática: mesmo pipeline dos cards de exames (Exames & Dietas)
+      // Leitura automática: mesmo pipeline dos cards de exames (Exames & Dietas),
+      // com retry adaptativo de resolução e lotes de páginas.
       let analysisFailed = false
       try {
-        const pages = await prepareExamPagesForAi(examFile, undefined, 1280, 0.9)
-        if (pages.length > 0) {
-          const aiRes = await analyzeExamWithAi({
-            examId: created.id,
-            images: pages,
-            title: created.title,
-            fallbackSource: examFile,
-          })
-          if (aiRes.biomarkers_extracted > 0) {
-            toast.success(
-              `IA transcreveu ${aiRes.biomarkers_extracted} biomarcador(es) para a área Biomarkers!`,
-            )
-          } else {
-            toast.success('IA gerou o resumo descritivo do laudo.')
-          }
+        const aiRes = await runExamAnalysisWithRetry({
+          examId: created.id,
+          fileUrlOrFile: examFile,
+          title: created.title,
+          onProgress: (msg) => toast.info(msg),
+        })
+        if (aiRes.biomarkers_extracted > 0) {
+          toast.success(
+            `IA extraiu ${aiRes.biomarkers_extracted} marcador(es) do laudo: ${aiRes.biomarkers_created} novo(s) em Biomarkers, ${aiRes.biomarkers_updated} atualizado(s).`,
+          )
+        } else {
+          toast.success('IA gerou o resumo descritivo do laudo.')
         }
       } catch (aiErr) {
         analysisFailed = true
@@ -170,9 +164,6 @@ export default function ExamUploadSection() {
       }
 
       await loadExams()
-      if (!analysisFailed) {
-        setExams((prev) => prev)
-      }
     } catch (err) {
       console.error(err)
       toast.error('Erro ao enviar o exame. Verifique o arquivo e tente novamente.')

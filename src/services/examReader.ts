@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 import pb from '@/lib/pocketbase/client'
 
 export interface ExamBiomarkerExtracted {
@@ -5,272 +6,424 @@ export interface ExamBiomarkerExtracted {
   value: string
   unit?: string
   reference_range?: string
-  status?: 'otimo' | 'alterado'
+  category?: string
+  status?: string
+  date?: string
+  notes?: string
 }
 
 export interface ExamAnalysisResponse {
   success: boolean
-  exam_id?: string
+  summary: string
   exam_title?: string
   exam_type?: string
-  exam_date?: string
-  laboratory?: string
-  overall_status?: 'normal' | 'alterado'
-  summary_text: string
+  biomarkers: ExamBiomarkerExtracted[]
   biomarkers_extracted: number
   biomarkers_created: number
   biomarkers_updated: number
-  biomarkers: ExamBiomarkerExtracted[]
-  model_used?: string
+  pages_analyzed: number
+  error?: string
+  code?: string
 }
 
-declare global {
-  interface Window {
-    pdfjsLib?: any
-  }
+const ANALYZE_EXAM_ENDPOINT = '/backend/v1/ai/analyze-exam'
+
+/** Página (JPEG em base64 puro, sem data URL) pronta para o analyze-exam. */
+export interface ExamPage {
+  base64: string
+  width: number
+  height: number
 }
 
-// Carrega o PDF.js via CDN com fallbacks garantidos caso ainda não esteja carregado
-let pdfjsPromise: Promise<any> | null = null
-
-export async function getPdfJs(): Promise<any> {
-  if (typeof window === 'undefined') {
-    throw new Error('PDF.js só pode ser carregado no navegador')
-  }
-
-  if (window.pdfjsLib) {
-    return window.pdfjsLib
-  }
-
-  if (pdfjsPromise) {
-    return pdfjsPromise
-  }
-
-  pdfjsPromise = new Promise((resolve, reject) => {
-    // Tenta carregar do CDN Cloudflare / cdnjs / unpkg
-    const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-    script.async = true
-    script.crossOrigin = 'anonymous'
-
-    script.onload = () => {
-      const lib = window.pdfjsLib
-      if (lib) {
-        lib.GlobalWorkerOptions.workerSrc =
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-        resolve(lib)
-      } else {
-        reject(new Error('Biblioteca PDF.js não carregada corretamente'))
-      }
-    }
-
-    script.onerror = () => {
-      // Fallback para unpkg
-      const fallbackScript = document.createElement('script')
-      fallbackScript.src = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'
-      fallbackScript.async = true
-      fallbackScript.crossOrigin = 'anonymous'
-
-      fallbackScript.onload = () => {
-        const lib = window.pdfjsLib
-        if (lib) {
-          lib.GlobalWorkerOptions.workerSrc =
-            'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js'
-          resolve(lib)
-        } else {
-          reject(new Error('Falha ao inicializar PDF.js pelo fallback unpkg'))
-        }
-      }
-
-      fallbackScript.onerror = () => {
-        reject(new Error('Não foi possível carregar a biblioteca de leitura de PDFs'))
-      }
-
-      document.head.appendChild(fallbackScript)
-    }
-
-    document.head.appendChild(script)
-  })
-
-  return pdfjsPromise
+type RawAnalyzeResponse = {
+  success?: boolean
+  summary?: string
+  exam_title?: string
+  exam_type?: string
+  biomarkers?: ExamBiomarkerExtracted[]
+  biomarkers_extracted?: number
+  biomarkers_created?: number
+  biomarkers_updated?: number
+  pages_analyzed?: number
+  error?: string
+  code?: string
 }
 
-/**
- * Converte um arquivo de imagem (PNG/JPG/WEBP) em data URL JPEG base64 redimensionado.
- */
-export async function convertImageToJpegBase64(
-  fileOrBlob: Blob,
-  maxSide = 1280,
-  quality = 0.9,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo de imagem'))
-    reader.onload = () => {
-      const img = new Image()
-      img.onerror = () => reject(new Error('Formato de imagem não suportado pelo navegador'))
-      img.onload = () => {
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
-        const canvas = document.createElement('canvas')
-        canvas.width = Math.max(1, Math.round(img.width * scale))
-        canvas.height = Math.max(1, Math.round(img.height * scale))
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          reject(new Error('Não foi possível inicializar canvas'))
-          return
-        }
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', quality))
-      }
-      img.src = reader.result as string
-    }
-    reader.readAsDataURL(fileOrBlob)
-  })
+export function extractPdfPageCount(data: Uint8Array): number | null {
+  // Conta "/Type /Page" (excluindo "/Pages"). PDFs reais separam os objetos,
+  // então um includes com contorno de palavra já é um bom estimador.
+  let text = ''
+  const step = Math.max(1, Math.floor(data.length / 3_000_000))
+  for (let i = 0; i < data.length; i += step) {
+    const end = Math.min(data.length, i + 4096)
+    const chunk = data.subarray(i, end)
+    text += String.fromCharCode(...Array.from(chunk))
+  }
+  const matches = text.match(/\/Type\s*\/Page[^s]/g)
+  if (matches && matches.length > 0) return matches.length
+  return null
 }
 
-/**
- * Converte páginas de um PDF em uma lista de strings data URL JPEG base64 (até maxPages).
- * Por padrão até 5 páginas — o mesmo limite aceito pelo hook analyze-exam — para que
- * laudos multipágina tenham TODAS as linhas de resultado enviadas à IA.
- */
-export async function renderPdfToJpegBase64List(
-  pdfSource: ArrayBuffer | Uint8Array | Blob | string,
-  maxPages = 5,
-  maxSide = 1280,
-  quality = 0.9,
-): Promise<string[]> {
-  const pdfjs = await getPdfJs()
-
-  let dataArg: any = {}
-  if (typeof pdfSource === 'string') {
-    // Se for URL http/https ou data URL
-    dataArg = { url: pdfSource }
-  } else if (pdfSource instanceof Blob) {
-    const buffer = await pdfSource.arrayBuffer()
-    dataArg = { data: new Uint8Array(buffer) }
-  } else if (pdfSource instanceof ArrayBuffer) {
-    dataArg = { data: new Uint8Array(pdfSource) }
-  } else {
-    dataArg = { data: pdfSource }
-  }
-
-  const loadingTask = pdfjs.getDocument({
-    ...dataArg,
-    cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
-    cMapPacked: true,
-  })
-
-  const pdf = await loadingTask.promise
-  const numPages = Math.min(pdf.numPages, maxPages)
-  const results: string[] = []
-
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum)
-    // Escala inicial de 1.5 para alta legibilidade de texto
-    const unscaledViewport = page.getViewport({ scale: 1.5 })
-    const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height)
-    const scale = maxDim > maxSide ? (maxSide / maxDim) * 1.5 : 1.5
+async function renderPdfPagesAtScale(
+  pdf: any,
+  targetWidth: number,
+  quality: number,
+  onPage?: (index: number, total: number) => void,
+): Promise<ExamPage[]> {
+  const pages: ExamPage[] = []
+  for (let i = 1; i <= pdf.numPages; i++) {
+    onPage?.(i - 1, pdf.numPages)
+    const page = await pdf.getPage(i)
+    const base = page.getViewport({ scale: 1 })
+    // Sempre upa para pelo menos targetWidth (downscale a partir do máximo útil).
+    const scale = Math.max(targetWidth / base.width, 1)
     const viewport = page.getViewport({ scale })
-
     const canvas = document.createElement('canvas')
-    canvas.width = Math.round(viewport.width)
-    canvas.height = Math.round(viewport.height)
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
     const ctx = canvas.getContext('2d')
-    if (!ctx) continue
-
-    // Fundo branco limpo
+    if (!ctx) throw new Error('Canvas 2D não disponível neste navegador.')
     ctx.fillStyle = '#ffffff'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-    await page.render({
-      canvasContext: ctx,
-      viewport: viewport,
-    }).promise
-
+    await page.render({ canvasContext: ctx, viewport }).promise
     const dataUrl = canvas.toDataURL('image/jpeg', quality)
-    results.push(dataUrl)
+    const pure = dataUrl.slice(dataUrl.indexOf(',') + 1)
+    pages.push({ base64: pure, width: canvas.width, height: canvas.height })
+    page.cleanup()
   }
-
-  return results
+  return pages
 }
 
 /**
- * Prepara qualquer arquivo (PDF ou Imagem) e devolve as páginas prontas para envio à IA.
+ * Renderiza TODAS as páginas do PDF (sem limite) em JPEGs base64.
+ * targetWidth é uma referência — o retry com resolução menor re-renderiza
+ * em ladders menores com o mesmo arquivo.
+ */
+export async function renderAllPdfPagesToJpegBase64(
+  fileUrlOrFile: string | File,
+  targetWidth = 1280,
+  quality = 0.9,
+  onPage?: (index: number, total: number) => void,
+): Promise<ExamPage[]> {
+  const pdfjs = await getPdfJs()
+  const data = await loadPdfData(fileUrlOrFile)
+  const pdf = await pdfjs.getDocument({ data }).promise
+  return renderPdfPagesAtScale(pdf, targetWidth, quality, onPage)
+}
+
+/** Compat: antiga API com limite de páginas (agora lê tudo). */
+export async function renderPdfToJpegBase64List(
+  fileUrlOrFile: string | File,
+  maxPages = Infinity,
+  targetWidth = 1280,
+  quality = 0.9,
+  onPage?: (index: number, total: number) => void,
+): Promise<ExamPage[]> {
+  const pdfjs = await getPdfJs()
+  const data = await loadPdfData(fileUrlOrFile)
+  const pdf = await pdfjs.getDocument({ data }).promise
+  const total = Math.min(pdf.numPages, maxPages)
+  const pages: ExamPage[] = []
+  for (let i = 1; i <= total; i++) {
+    onPage?.(i - 1, total)
+    const page = await pdf.getPage(i)
+    const base = page.getViewport({ scale: 1 })
+    const scale = Math.max(targetWidth / base.width, 1)
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas 2D não disponível neste navegador.')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    await page.render({ canvasContext: ctx, viewport }).promise
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
+    const pure = dataUrl.slice(dataUrl.indexOf(',') + 1)
+    pages.push({ base64: pure, width: canvas.width, height: canvas.height })
+    page.cleanup()
+  }
+  return pages
+}
+
+async function loadPdfData(fileUrlOrFile: string | File): Promise<Uint8Array> {
+  if (typeof fileUrlOrFile !== 'string') {
+    return new Uint8Array(await fileUrlOrFile.arrayBuffer())
+  }
+  const res = await fetch(fileUrlOrFile, { credentials: 'include' })
+  if (!res.ok) throw new Error(`Falha ao baixar o PDF do exame (${res.status}).`)
+  return new Uint8Array(await res.arrayBuffer())
+}
+
+export async function convertImageToJpegBase64(
+  fileUrlOrFile: string | File,
+  targetWidth = 1280,
+  quality = 0.9,
+): Promise<ExamPage[]> {
+  const img = await loadImage(fileUrlOrFile)
+  const scale = Math.max(targetWidth / img.naturalWidth, 0.05)
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(img.naturalWidth * scale)
+  canvas.height = Math.round(img.naturalHeight * scale)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D não disponível neste navegador.')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  const dataUrl = canvas.toDataURL('image/jpeg', quality)
+  const pure = dataUrl.slice(dataUrl.indexOf(',') + 1)
+  return [{ base64: pure, width: canvas.width, height: canvas.height }]
+}
+
+function loadImage(src: string | File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Não foi possível carregar a imagem.'))
+    img.src = typeof src === 'string' ? src : URL.createObjectURL(src)
+  })
+}
+
+/**
+ * Prepara todas as páginas do arquivo (PDF com qualquer nº de páginas, ou imagem única)
+ * para o analyze-exam, na resolução de referência. O retry com resolução menor é
+ * feito por runExamAnalysisWithRetry, que re-renderiza a partir do mesmo arquivo.
  */
 export async function prepareExamPagesForAi(
-  source: File | Blob | string,
-  isPdf?: boolean,
-  maxSide = 1280,
+  fileUrlOrFile: string | File,
+  _maxPages?: number,
+  targetWidth = 1280,
   quality = 0.9,
-): Promise<string[]> {
-  const isLikelyPdf =
-    isPdf ??
-    (source instanceof File
-      ? source.type === 'application/pdf' || source.name.toLowerCase().endsWith('.pdf')
-      : typeof source === 'string' && source.toLowerCase().includes('.pdf'))
-
-  if (isLikelyPdf) {
-    return await renderPdfToJpegBase64List(source, 5, maxSide, quality)
+  onPage?: (index: number, total: number) => void,
+): Promise<ExamPage[]> {
+  const isPdf =
+    typeof fileUrlOrFile === 'string'
+      ? fileUrlOrFile.toLowerCase().includes('.pdf')
+      : fileUrlOrFile.type === 'application/pdf' ||
+        fileUrlOrFile.name.toLowerCase().endsWith('.pdf')
+  if (isPdf) {
+    return renderAllPdfPagesToJpegBase64(fileUrlOrFile, targetWidth, quality, onPage)
   }
-
-  if (source instanceof Blob) {
-    const single = await convertImageToJpegBase64(source, maxSide, quality)
-    return [single]
-  }
-
-  if (typeof source === 'string') {
-    // Faz fetch para converter em blob e depois em JPEG
-    const resp = await fetch(source)
-    const blob = await resp.blob()
-    const contentType = resp.headers.get('content-type') || ''
-    if (contentType.includes('pdf') || source.toLowerCase().includes('.pdf')) {
-      return await renderPdfToJpegBase64List(blob, 5, maxSide, quality)
-    }
-    const single = await convertImageToJpegBase64(blob, maxSide, quality)
-    return [single]
-  }
-
-  return []
+  return convertImageToJpegBase64(fileUrlOrFile, targetWidth, quality)
 }
 
-/**
- * Envia as páginas renderizadas do exame para o endpoint de IA.
- * Em caso de erro 503 GATEWAY_REJECTED_IMAGE, refaz automaticamente a compressão a 768px.
- */
-export async function analyzeExamWithAi(params: {
-  examId?: string
-  images: string[]
-  title?: string
-  fallbackSource?: File | Blob | string
-}): Promise<ExamAnalysisResponse> {
+async function callAnalyzeExamOnce(body: Record<string, unknown>): Promise<ExamAnalysisResponse> {
   try {
-    const res = await pb.send('/backend/v1/ai/analyze-exam', {
+    const res = await pb.send(ANALYZE_EXAM_ENDPOINT, {
       method: 'POST',
-      body: JSON.stringify({
-        examId: params.examId,
-        images: params.images,
-        title: params.title,
-      }),
+      body: JSON.stringify(body),
     })
-    return res as ExamAnalysisResponse
+    return normalizeAnalyzeResponse(res)
   } catch (err: any) {
-    if (err?.response?.code === 'GATEWAY_REJECTED_IMAGE' && params.fallbackSource) {
-      console.warn('analyze-exam: gateway rejeitou o tamanho da imagem, tentando a 768px...')
-      const smallerPages = await prepareExamPagesForAi(params.fallbackSource, undefined, 768, 0.8)
-      const res = await pb.send('/backend/v1/ai/analyze-exam', {
-        method: 'POST',
-        body: JSON.stringify({
-          examId: params.examId,
-          images: smallerPages,
-          title: params.title,
-        }),
-      })
-      return res as ExamAnalysisResponse
+    const status = err?.status || err?.response?.status
+    if (status === 413 || status === 503 || status === 400) {
+      const raw = err?.response
+      throw new GatewayRejection(status, normalizeAnalyzeResponse(raw))
     }
     throw err
   }
+}
+
+export class GatewayRejection extends Error {
+  status: number
+  payload: RawAnalyzeResponse
+  constructor(status: number, payload: RawAnalyzeResponse) {
+    const detail =
+      payload?.error && typeof payload.error === 'string'
+        ? payload.error
+        : 'O serviço de IA recusou as páginas do exame.'
+    super(detail)
+    this.name = 'GatewayRejection'
+    this.status = status
+    this.payload = payload
+  }
+}
+
+function normalizeAnalyzeResponse(raw: any): ExamAnalysisResponse {
+  const biomarkers = Array.isArray(raw?.biomarkers) ? raw.biomarkers : []
+  const declaredCount =
+    typeof raw?.biomarkers_extracted === 'number' ? raw.biomarkers_extracted : biomarkers.length
+  const created = typeof raw?.biomarkers_created === 'number' ? raw.biomarkers_created : 0
+  const updated = typeof raw?.biomarkers_updated === 'number' ? raw.biomarkers_updated : 0
+  const pages = typeof raw?.pages_analyzed === 'number' ? raw.pages_analyzed : 0
+  return {
+    success: raw?.success !== false,
+    summary: typeof raw?.summary === 'string' ? raw.summary : '',
+    exam_title: raw?.exam_title,
+    exam_type: raw?.exam_type,
+    biomarkers,
+    biomarkers_extracted: declaredCount || biomarkers.length,
+    biomarkers_created: created,
+    biomarkers_updated: updated,
+    pages_analyzed: pages,
+    error: typeof raw?.error === 'string' ? raw.error : undefined,
+    code: typeof raw?.code === 'string' ? raw.code : undefined,
+  }
+}
+
+/** Escada de resolução: cada tentativa reduz a largura alvo (e a qualidade). */
+const RESOLUTION_LADDER: Array<{ width: number; quality: number; maxPagesPerBatch: number }> = [
+  { width: 1280, quality: 0.9, maxPagesPerBatch: 3 },
+  { width: 1024, quality: 0.82, maxPagesPerBatch: 3 },
+  { width: 768, quality: 0.75, maxPagesPerBatch: 2 },
+  { width: 512, quality: 0.7, maxPagesPerBatch: 1 },
+]
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+/**
+ * Roda a análise com recuperação adaptativa:
+ * 1. Renderiza TODAS as páginas na resolução inicial (1280px).
+ * 2. Envia em lotes de até maxPagesPerBatch páginas por requisição.
+ * 3. Se o gateway recusar (400/413/503), reduz a resolução/qualidade e o tamanho
+ *    do lote (1280 → 1024 → 768 → 512, 3 → 2 → 1 página) e tenta de novo,
+ *    sempre re-renderizando as páginas a partir do arquivo original.
+ * 4. Consolida o resumo e os marcadores de todos os lotes.
+ */
+export async function runExamAnalysisWithRetry(opts: {
+  examId: string
+  fileUrlOrFile: string | File
+  title?: string
+  onProgress?: (msg: string) => void
+}): Promise<ExamAnalysisResponse> {
+  const { examId, fileUrlOrFile, title, onProgress } = opts
+  onProgress?.('Preparando e renderizando o documento completo...')
+  const masterPages = await prepareExamPagesForAi(fileUrlOrFile, undefined, 1280, 0.9)
+  if (masterPages.length === 0) {
+    throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
+  }
+  onProgress?.(`Documento com ${masterPages.length} página(s) renderizado(s).`)
+
+  let ladderIndex = 0
+  let lastError: unknown = null
+  while (ladderIndex < RESOLUTION_LADDER.length) {
+    const step = RESOLUTION_LADDER[ladderIndex]
+    try {
+      let pagesAtStep = masterPages
+      if (step.width !== 1280) {
+        onProgress?.(
+          `Gateway recusou as páginas — re-renderizando em ${step.width}px, ${step.maxPagesPerBatch} página(s) por requisição...`,
+        )
+        pagesAtStep = await prepareExamPagesForAi(
+          fileUrlOrFile,
+          undefined,
+          step.width,
+          step.quality,
+        )
+      }
+      const batches = chunkArray(pagesAtStep, step.maxPagesPerBatch)
+      const allBiomarkers: ExamBiomarkerExtracted[] = []
+      const summaries: string[] = []
+      let examTitle: string | undefined
+      let examType: string | undefined
+      let createdTotal = 0
+      let updatedTotal = 0
+
+      for (let b = 0; b < batches.length; b++) {
+        const batch = batches[b]
+        onProgress?.(
+          `Analisando páginas ${b * step.maxPagesPerBatch + 1}-${
+            b * step.maxPagesPerBatch + batch.length
+          } de ${pagesAtStep.length} (resolução ${step.width}px)...`,
+        )
+        const partial = await callAnalyzeExamOnce({
+          examId,
+          images: batch.map((p) => `data:image/jpeg;base64,${p.base64}`),
+          // Em lotes, marca como parcial para o hook NÃO regravar marcadores
+          // duplicados — só o último lote consolida e persiste.
+          partial_batch: b < batches.length - 1,
+          batch_index: b,
+          batch_total: batches.length,
+          title,
+          previous_summary: b > 0 ? summaries[b - 1] : undefined,
+          previous_biomarkers:
+            b > 0
+              ? allBiomarkers.map((m) => ({
+                  name: m.name,
+                  value: m.value,
+                  unit: m.unit,
+                  reference_range: m.reference_range,
+                }))
+              : undefined,
+        })
+        if (partial.summary) summaries.push(partial.summary)
+        if (partial.exam_title) examTitle = partial.exam_title
+        if (partial.exam_type) examType = partial.exam_type
+        createdTotal += partial.biomarkers_created
+        updatedTotal += partial.biomarkers_updated
+        allBiomarkers.push(...partial.biomarkers)
+      }
+
+      onProgress?.('Consolidando resultado da leitura...')
+      return {
+        success: true,
+        summary: summaries.join('\n\n'),
+        exam_title: examTitle,
+        exam_type: examType,
+        biomarkers: allBiomarkers,
+        biomarkers_extracted: allBiomarkers.length,
+        biomarkers_created: createdTotal,
+        biomarkers_updated: updatedTotal,
+        pages_analyzed: pagesAtStep.length,
+      }
+    } catch (err: any) {
+      lastError = err
+      if (err instanceof GatewayRejection && ladderIndex < RESOLUTION_LADDER.length - 1) {
+        ladderIndex++
+        continue
+      }
+      throw err
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Não foi possível analisar o exame com IA.')
+}
+
+/**
+ * Compat: antiga API de uma requisição única, agora com o retry adaptativo.
+ * Mantida para não quebrar chamadas existentes; prefira runExamAnalysisWithRetry.
+ */
+export async function analyzeExamWithAi(opts: {
+  examId: string
+  images: ExamPage[] | string[]
+  title?: string
+  fallbackSource?: string | File
+}): Promise<ExamAnalysisResponse> {
+  const images = (opts.images || []).map((p) =>
+    typeof p === 'string' ? p : `data:image/jpeg;base64,${p.base64}`,
+  )
+  if (opts.fallbackSource) {
+    return runExamAnalysisWithRetry({
+      examId: opts.examId,
+      fileUrlOrFile: opts.fallbackSource,
+      title: opts.title,
+    })
+  }
+  return callAnalyzeExamOnce({
+    examId: opts.examId,
+    images,
+    title: opts.title,
+  })
+}
+
+// pdf.js é carregado sob demanda de CDN (não é dependência npm do projeto).
+const PDFJS_VERSION = '4.10.38'
+const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`
+const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`
+
+let pdfJsPromise: Promise<any> | null = null
+export async function getPdfJs(): Promise<any> {
+  if (!pdfJsPromise) {
+    pdfJsPromise = import(/* @vite-ignore */ PDFJS_URL).then((mod: any) => {
+      mod.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL
+      return mod
+    })
+  }
+  return pdfJsPromise
 }
