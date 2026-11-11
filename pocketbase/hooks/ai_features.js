@@ -633,6 +633,18 @@ routerAdd(
         .trim()
     }
 
+    // A coleção profile_biomarkers pode estar temporariamente indisponível
+    // (ex.: removida por engano no painel). Nesse caso o endpoint ainda deve
+    // devolver o resumo do laudo em vez de falhar com "resource wasn't found".
+    const biomarkersColOrNull = () => {
+      try {
+        return $app.findCollectionByNameOrId('profile_biomarkers')
+      } catch (err) {
+        console.log('analyze-exam: coleção profile_biomarkers indisponível: ' + err.message)
+        return null
+      }
+    }
+
     const authRecord = e.auth
     if (!authRecord || !authRecord.id) {
       return e.json(401, { error: 'Autenticação necessária' })
@@ -821,22 +833,24 @@ routerAdd(
           }
         }
 
-        // Grava no profile_biomarkers
-        const biomarkersCol = $app.findCollectionByNameOrId('profile_biomarkers')
+        // Grava no profile_biomarkers (se a coleção existir)
+        const biomarkersCol = biomarkersColOrNull()
         let createdC = 0
         let updatedC = 0
 
         let existings = []
-        try {
-          existings = $app.findRecordsByFilter(
-            'profile_biomarkers',
-            'user = {:user}',
-            '-created',
-            500,
-            0,
-            { user: examUserId },
-          )
-        } catch (_) {}
+        if (biomarkersCol) {
+          try {
+            existings = $app.findRecordsByFilter(
+              'profile_biomarkers',
+              'user = {:user}',
+              '-created',
+              500,
+              0,
+              { user: examUserId },
+            )
+          } catch (_) {}
+        }
 
         const existMap = new Map()
         for (let x = 0; x < existings.length; x++) {
@@ -844,7 +858,7 @@ routerAdd(
           existMap.set(normalizeKey(r.getString('name')), r)
         }
 
-        for (let y = 0; y < hemogramaData.biomarkers.length; y++) {
+        for (let y = 0; y < (biomarkersCol ? hemogramaData.biomarkers.length : 0); y++) {
           const b = hemogramaData.biomarkers[y]
           const k = normalizeKey(b.name)
           const exist = existMap.get(k)
@@ -1138,18 +1152,24 @@ routerAdd(
 
     // 2. Grava ou atualiza os biomarcadores na coleção profile_biomarkers
     // Busca biomarcadores já existentes do usuário para evitar duplicatas ou atualizar
+    const biomarkersCollection = biomarkersColOrNull()
+    let createdCount = 0
+    let updatedCount = 0
+
     let existingBiomarkers = []
-    try {
-      existingBiomarkers = $app.findRecordsByFilter(
-        'profile_biomarkers',
-        'user = {:user}',
-        '-date,-created',
-        500,
-        0,
-        { user: examUserId },
-      )
-    } catch (err) {
-      console.log('analyze-exam: erro ao buscar profile_biomarkers: ' + err.message)
+    if (biomarkersCollection) {
+      try {
+        existingBiomarkers = $app.findRecordsByFilter(
+          'profile_biomarkers',
+          'user = {:user}',
+          '-date,-created',
+          500,
+          0,
+          { user: examUserId },
+        )
+      } catch (err) {
+        console.log('analyze-exam: erro ao buscar profile_biomarkers: ' + err.message)
+      }
     }
 
     const existingMap = new Map()
@@ -1161,11 +1181,7 @@ routerAdd(
       }
     }
 
-    const biomarkersCollection = $app.findCollectionByNameOrId('profile_biomarkers')
-    let createdCount = 0
-    let updatedCount = 0
-
-    for (let j = 0; j < validBiomarkers.length; j++) {
+    for (let j = 0; j < (biomarkersCollection ? validBiomarkers.length : 0); j++) {
       const bio = validBiomarkers[j]
       const normKey = normalizeKey(bio.name)
       const existing = existingMap.get(normKey)
