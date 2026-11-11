@@ -19,6 +19,8 @@ import { Medication, medicationService } from '@/services/medications'
 import { healthService } from '@/services/health'
 import { medicalService } from '@/services/medical'
 import { profileService } from '@/services/profile'
+import { mealService } from '@/services/mealsAndAi'
+import { loadDashboardPreferences } from '@/services/preferences'
 import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/preventiveScore'
 
 import { BasicInfoSection } from '@/components/profile/BasicInfoSection'
@@ -107,6 +109,9 @@ export const ProfilePage: React.FC = () => {
   const [metrics, setMetrics] = useState<HealthMetric[]>([])
   const [exams, setExams] = useState<Exam[]>([])
   const [emotionalLogs, setEmotionalLogs] = useState<EmotionalLog[]>([])
+  const [meals, setMeals] = useState<{ date_time: string }[]>([])
+  const [symptoms, setSymptoms] = useState<HealthMetric[]>([])
+  const [sleepGoalHours, setSleepGoalHours] = useState<number | undefined>(undefined)
 
   const loadAllData = useCallback(
     async (isRefresh = false) => {
@@ -129,6 +134,9 @@ export const ProfilePage: React.FC = () => {
           metricsData,
           examsData,
           emoData,
+          mealsData,
+          symptomsData,
+          prefsData,
         ] = await Promise.all([
           profileService.getBasicProfile(user.id),
           profileService.getBiomarkers(user.id),
@@ -143,6 +151,9 @@ export const ProfilePage: React.FC = () => {
           healthService.listUserMetrics(user.id, 200).catch(() => []),
           medicalService.listExams(user.id).catch(() => []),
           emotionalService.listLogs(user.id, 60).catch(() => []),
+          mealService.listMeals(user.id).catch(() => []),
+          healthService.listAllSymptomMetrics(user.id).catch(() => []),
+          loadDashboardPreferences().catch(() => null),
         ])
 
         setBasicProfile(basicData)
@@ -158,6 +169,9 @@ export const ProfilePage: React.FC = () => {
         setMetrics(metricsData)
         setExams(examsData)
         setEmotionalLogs(emoData)
+        setMeals(mealsData)
+        setSymptoms(symptomsData)
+        setSleepGoalHours(prefsData?.sleepGoalHours)
       } catch (err: any) {
         toast({
           title: 'Erro ao carregar perfil',
@@ -203,16 +217,32 @@ export const ProfilePage: React.FC = () => {
 
   // Recálculo dinâmico do Preventive Health Score
   const scoreResult: PreventiveHealthScoreData = useMemo(() => {
+    // Junta métricas gerais e sintomas (sem duplicar registros já presentes)
+    const metricIds = new Set(metrics.map((m) => m.id))
+    const allMetrics = [...metrics, ...symptoms.filter((s) => !metricIds.has(s.id))]
     return computePreventiveHealthScore({
-      metrics,
+      metrics: allMetrics,
       exams,
       biomarkers,
       lifestyle,
       vaccinations,
+      meals,
+      sleepGoalHours,
       userAge: age ?? undefined,
       userGender: basicProfile?.gender,
     })
-  }, [metrics, exams, biomarkers, lifestyle, vaccinations, age, basicProfile?.gender])
+  }, [
+    metrics,
+    symptoms,
+    meals,
+    sleepGoalHours,
+    exams,
+    biomarkers,
+    lifestyle,
+    vaccinations,
+    age,
+    basicProfile?.gender,
+  ])
 
   // Recálculo dinâmico do Score do Diário Emocional (0 a 10)
   const emotionalScoreResult: EmotionalScoreSummary = useMemo(() => {

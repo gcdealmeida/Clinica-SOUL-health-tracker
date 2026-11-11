@@ -77,6 +77,8 @@ interface ComputeScoreInput {
   userAge?: number
   userGender?: string
   meals?: { date_time: string }[]
+  /** Meta diária de sono definida pelo usuário (horas). Padrão: 7 h. */
+  sleepGoalHours?: number
 }
 
 // ---------------------------------------------------------------
@@ -203,6 +205,7 @@ const LIPID_NAMES = ['colesterol total', 'hdl', 'ldl', 'trigliceri', 'vldl', 'n�
 
 export function computePreventiveHealthScore(input: ComputeScoreInput): PreventiveHealthScoreData {
   const { metrics, exams, biomarkers, vaccinations, lifestyle, meals = [] } = input
+  const sleepGoal = input.sleepGoalHours && input.sleepGoalHours > 0 ? input.sleepGoalHours : 7
   // Regras por sexo biológico só se aplicam ao sexo feminino (Basic Info); outros casos não pontuam.
   const isFemale = input.userGender === 'Feminino'
   const cut1095 = daysAgoStr(1095)
@@ -587,16 +590,16 @@ export function computePreventiveHealthScore(input: ComputeScoreInput): Preventi
     const logs = recent7.filter((m) => m.category === 'sono')
     const values = logs.map((s) => num(s.numeric_value)).filter((v): v is number => v !== undefined)
     const avg = values.length ? round1(mean(values)) : num(lifestyle?.sleep_hours_typical) // fallback: perfil
-    const status = higherBetter(avg, 7, 6)
+    const status = higherBetter(avg, sleepGoal, sleepGoal - 1)
     action.push(
       makeItem(
         'act-sleep',
-        'Meta de Sono (7h+ por noite)',
+        `Meta de Sono (${sleepGoal}h+ por noite)`,
         'Média de sono dos últimos 7 dias',
         status,
         2,
-        'OMS / AASM: 7 horas ou mais de sono por noite para adultos',
-        recFor(status, undefined, 'Priorize dormir mais cedo para atingir 7 a 8 horas'),
+        'OMS / AASM: 7 horas ou mais de sono por noite para adultos; a meta usada é a definida pelo usuário',
+        recFor(status, undefined, `Priorize dormir mais cedo para atingir ${sleepGoal} horas`),
         { valueLabel: avg !== undefined ? `${avg}h de média` : 'Sem registros' },
       ),
     )
