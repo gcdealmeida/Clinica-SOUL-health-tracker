@@ -21,6 +21,10 @@ import {
   Zap,
   TrendingUp,
   Brain,
+  Award,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from 'lucide-react'
 
 export const EmotionalDiaryPage: React.FC = () => {
@@ -30,6 +34,7 @@ export const EmotionalDiaryPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'360' | 'history'>('360')
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<EmotionalLog | null>(null)
+  const [guidelinesOpen, setGuidelinesOpen] = useState(true)
 
   const today = todayStr()
   const todayLog = logs.find((l) => (l.date || '').slice(0, 10) === today)
@@ -104,27 +109,35 @@ export const EmotionalDiaryPage: React.FC = () => {
       <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8 space-y-6">
-        {/* Banner de Boas-Vindas & Ação Principal de Check-in */}
+        {/* Banner Superior Verde: Diretrizes do Diário Emocional & Ação Principal de Check-in */}
         <div className="rounded-3xl p-5 sm:p-7 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-lg relative overflow-hidden">
           <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div className="space-y-2 max-w-2xl">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-start justify-between gap-5">
+            <div className="space-y-3 max-w-3xl">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                 <span>Diário Emocional & Vida 360º • Estilo Daylio</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                Como está o seu dia hoje?
-              </h1>
-              <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-                Avalie seus 11 pilares de vida com carinho, registre emoções, humor, estresse e
-                sono. Sem burocracia de calendário: o check-in registra sempre o momento presente de
-                hoje.
+
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
+                  <Award className="w-6 h-6 text-amber-300 shrink-0 hidden sm:inline" />
+                  Diretrizes do Diário Emocional
+                </h1>
+                <p className="text-xs sm:text-sm font-semibold text-emerald-100 mt-1">
+                  Diretriz Clínica Soul — Equilíbrio integral entre corpo, mente, relações e
+                  propósito
+                </p>
+              </div>
+
+              <p className="text-xs sm:text-sm text-white/95 leading-relaxed">
+                A verdadeira saúde preventiva vai muito além de exames de sangue e pesagem. Ela se
+                ancora na harmonia dos 11 aspectos da sua vida.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 self-start md:self-auto">
               <Button
                 onClick={handleOpenNewCheckin}
                 className="bg-white hover:bg-white/90 text-emerald-800 font-bold px-6 py-3 h-12 rounded-2xl shadow-md text-sm gap-2 transition-all hover:scale-[1.02]"
@@ -135,9 +148,64 @@ export const EmotionalDiaryPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Bloco de Interpretação da Vida 360º (Legenda de Percentuais com alto contraste e clareza) */}
+          <div className="relative z-10 mt-5 pt-4 border-t border-white/20">
+            <div className="rounded-2xl bg-black/20 backdrop-blur-md border border-white/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                  <span>💡</span>
+                  <span>Como interpretar sua Vida 360º:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setGuidelinesOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-100 hover:text-white px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                  aria-label="Alternar exibição da legenda"
+                >
+                  <span>{guidelinesOpen ? 'Recolher' : 'Exibir'}</span>
+                  {guidelinesOpen ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+
+              {guidelinesOpen && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/15 border border-white/20">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 mt-1 shrink-0 shadow-xs" />
+                    <div className="text-xs leading-snug">
+                      <span className="font-bold text-white block">80-100%</span>
+                      <span className="text-emerald-50">Pilar nutrido e resiliente.</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/15 border border-white/20">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-300 mt-1 shrink-0 shadow-xs" />
+                    <div className="text-xs leading-snug">
+                      <span className="font-bold text-white block">50-79%</span>
+                      <span className="text-amber-100">
+                        Equilibrado com oportunidades de melhora.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/15 border border-white/20">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-300 mt-1 shrink-0 shadow-xs" />
+                    <div className="text-xs leading-snug">
+                      <span className="font-bold text-white block">Abaixo de 50%</span>
+                      <span className="text-rose-100">Sugere sobrecarga ou afastamento.</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Destaque rápido se já preencheu hoje */}
           {todayLog && (
-            <div className="relative z-10 mt-4 pt-3 border-t border-white/20 flex flex-wrap items-center gap-3 text-xs text-white/95">
+            <div className="relative z-10 mt-3 pt-3 border-t border-white/15 flex flex-wrap items-center gap-3 text-xs text-white/95">
               <span className="font-semibold flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping" />
                 Hoje registrado:
