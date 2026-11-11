@@ -217,9 +217,28 @@ async function callAnalyzeExamOnce(body: Record<string, unknown>): Promise<ExamA
     return normalizeAnalyzeResponse(res)
   } catch (err: any) {
     const status = err?.status || err?.response?.status
-    if (status === 413 || status === 503 || status === 400) {
+    if (
+      status === 413 ||
+      status === 503 ||
+      status === 400 ||
+      status === 408 ||
+      status === 502 ||
+      status === 504
+    ) {
       const raw = err?.response
       throw new GatewayRejection(status, normalizeAnalyzeResponse(raw))
+    }
+    // Sem status HTTP (ClientResponseError status 0 / TypeError "Failed to
+    // fetch") a requisição nem chegou ao backend: corpo grande demais para o
+    // ingress/proxy ou conexão quebrada por timeout. Trata como recusa do
+    // gateway para que a escada re-tente com payload menor, em zero para o
+    // usuário.
+    if (!status || err instanceof TypeError) {
+      throw new GatewayRejection(0, {
+        error:
+          'A conexão falhou ao enviar as páginas do exame (payload muito grande ou timeout do ' +
+          'servidor). Tentando novamente com resolução menor...',
+      })
     }
     throw err
   }
@@ -262,26 +281,53 @@ function normalizeAnalyzeResponse(raw: any): ExamAnalysisResponse {
   }
 }
 
-/** Escada de resolução: cada tentativa reduz a largura alvo (e a qualidade). */
+/**
+ * Escada de resolução: cada tentativa reduz a largura alvo (e a qualidade).
+ * v0.0.61: o gateway de IA e o ingress do Skip Cloud rejeitam payloads grandes
+ * (413 "Request body is too large" / "Failed to fetch" sem resposta), então a
+ * escada começa conservadora — 1 página por requisição, JPEG q0.75 — e cada
+ * requisição fica bem abaixo de ~1.2MB de corpo.
+ */
 const RESOLUTION_LADDER: Array<{ width: number; quality: number; maxPagesPerBatch: number }> = [
-  { width: 1280, quality: 0.9, maxPagesPerBatch: 3 },
-  { width: 1024, quality: 0.82, maxPagesPerBatch: 3 },
-  { width: 768, quality: 0.75, maxPagesPerBatch: 2 },
-  { width: 512, quality: 0.7, maxPagesPerBatch: 1 },
+  { width: 1024, quality: 0.75, maxPagesPerBatch: 1 },
+  { width: 768, quality: 0.7, maxPagesPerBatch: 1 },
+  { width: 512, quality: 0.6, maxPagesPerBatch: 1 },
 ]
 
-function chunkArray<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-  return out
+/** Teto aproximado de caracteres base64 (JSON) por requisição (~1.2MB). */
+const MAX_BATCH_CHARS = 1_200_000
+
+/**
+ * Agrupa páginas em lotes respeitando TANTO o nº máximo de páginas por
+ * requisição QUANTO o teto de tamanho do corpo — uma página escaneada pode
+ * sozinha estourar o limite do proxy/ingress e derrubar a chamada com
+ * "Failed to fetch" antes de chegar ao hook.
+ */
+function buildBatches(pages: ExamPage[], maxPages: number): ExamPage[][] {
+  const batches: ExamPage[][] = []
+  let current: ExamPage[] = []
+  let chars = 0
+  for (const page of pages) {
+    const cost = page.base64.length + 120
+    if (current.length > 0 && (current.length >= maxPages || chars + cost > MAX_BATCH_CHARS)) {
+      batches.push(current)
+      current = []
+      chars = 0
+    }
+    current.push(page)
+    chars += cost
+  }
+  if (current.length > 0) batches.push(current)
+  return batches
 }
 
 /**
  * Roda a análise com recuperação adaptativa:
- * 1. Renderiza TODAS as páginas na resolução inicial (1280px).
- * 2. Envia em lotes de até maxPagesPerBatch páginas por requisição.
- * 3. Se o gateway recusar (400/413/503), reduz a resolução/qualidade e o tamanho
- *    do lote (1280 → 1024 → 768 → 512, 3 → 2 → 1 página) e tenta de novo,
+ * 1. Renderiza TODAS as páginas na resolução inicial (1024px, JPEG q0.75).
+ * 2. Envia em lotes de até maxPagesPerBatch páginas por requisição, com teto
+ *    de tamanho de corpo por requisição (buildBatches).
+ * 3. Se o gateway/ingress recusar (413/503/400 ou falha de rede "Failed to
+ *    fetch"), reduz a resolução/qualidade (1024 → 768 → 512) e tenta de novo,
  *    sempre re-renderizando as páginas a partir do arquivo original.
  * 4. Consolida o resumo e os marcadores de todos os lotes.
  */
@@ -293,7 +339,7 @@ export async function runExamAnalysisWithRetry(opts: {
 }): Promise<ExamAnalysisResponse> {
   const { examId, fileUrlOrFile, title, onProgress } = opts
   onProgress?.('Preparando e renderizando o documento completo...')
-  const masterPages = await prepareExamPagesForAi(fileUrlOrFile, undefined, 1280, 0.9)
+  const masterPages = await prepareExamPagesForAi(fileUrlOrFile, undefined, 1024, 0.75)
   if (masterPages.length === 0) {
     throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
   }
@@ -305,7 +351,7 @@ export async function runExamAnalysisWithRetry(opts: {
     const step = RESOLUTION_LADDER[ladderIndex]
     try {
       let pagesAtStep = masterPages
-      if (step.width !== 1280) {
+      if (ladderIndex > 0) {
         onProgress?.(
           `Gateway recusou as páginas — re-renderizando em ${step.width}px, ${step.maxPagesPerBatch} página(s) por requisição...`,
         )
@@ -316,7 +362,7 @@ export async function runExamAnalysisWithRetry(opts: {
           step.quality,
         )
       }
-      const batches = chunkArray(pagesAtStep, step.maxPagesPerBatch)
+      const batches = buildBatches(pagesAtStep, step.maxPagesPerBatch)
       const allBiomarkers: ExamBiomarkerExtracted[] = []
       const summaries: string[] = []
       let examTitle: string | undefined
@@ -326,10 +372,11 @@ export async function runExamAnalysisWithRetry(opts: {
 
       for (let b = 0; b < batches.length; b++) {
         const batch = batches[b]
+        const firstPage = batches.slice(0, b).reduce((n, bt) => n + bt.length, 0)
         onProgress?.(
-          `Analisando páginas ${b * step.maxPagesPerBatch + 1}-${
-            b * step.maxPagesPerBatch + batch.length
-          } de ${pagesAtStep.length} (resolução ${step.width}px)...`,
+          `Analisando páginas ${firstPage + 1}-${firstPage + batch.length} de ${
+            pagesAtStep.length
+          } (resolução ${step.width}px)...`,
         )
         const partial = await callAnalyzeExamOnce({
           examId,
