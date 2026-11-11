@@ -24,7 +24,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
-import { Sparkles, Calendar, TrendingUp, Compass, Award } from 'lucide-react'
+import { TrendingUp, Compass } from 'lucide-react'
 
 interface Life360ViewProps {
   logs: EmotionalLog[]
@@ -134,137 +134,87 @@ export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin })
       </div>
 
       {/* Cards de Resumo & Gráfico Radar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Painel Radar de Equilíbrio */}
-        <Card className="rounded-3xl border-border/70 shadow-sm lg:col-span-2 flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-violet-600" />
-                  Roda da Vida 360º (11 Aspectos)
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Distribuição de energia e dedicação nos 11 pilares
-                </CardDescription>
-              </div>
-              <div className="text-right">
-                <span className="text-2xl font-black text-foreground">{globalScore}%</span>
-                <span className="text-[10px] block font-semibold text-muted-foreground">
-                  Índice Global 360º
-                </span>
-              </div>
+      <Card className="rounded-3xl border-border/70 shadow-sm flex flex-col justify-between">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-violet-600" />
+                Roda da Vida 360º (11 Aspectos)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Distribuição de energia e dedicação nos 11 pilares
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={radarData} outerRadius="75%">
-                  <PolarGrid stroke="currentColor" className="text-muted/30" />
-                  <PolarAngleAxis
-                    dataKey="subject"
-                    tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 600 }}
-                    className="text-foreground"
-                  />
-                  <PolarRadiusAxis
-                    angle={30}
-                    domain={[0, 100]}
-                    tick={{ fontSize: 9 }}
-                    stroke="currentColor"
-                    className="text-muted-foreground/50"
-                  />
-                  <Radar
-                    name="Equilíbrio"
-                    dataKey="score"
-                    stroke="#8b5cf6"
-                    fill="#8b5cf6"
-                    fillOpacity={0.4}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 mt-2 pt-3 border-t border-border/50">
-              {bestAspect && (
-                <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50">
-                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
-                    Pilar mais Forte
-                  </span>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-base">{bestAspect.emoji}</span>
-                    <span className="text-xs font-bold text-foreground">{bestAspect.title}</span>
-                    <span className="text-xs font-black text-emerald-600 ml-auto">
-                      {bestAspectScore}%
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {attentionAspect && (
-                <div className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/50">
-                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider block">
-                    Ponto de Atenção
-                  </span>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className="text-base">{attentionAspect.emoji}</span>
-                    <span className="text-xs font-bold text-foreground">
-                      {attentionAspect.title}
-                    </span>
-                    <span className="text-xs font-black text-amber-600 ml-auto">
-                      {attentionAspectScore}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card Lateral: Destaques & Ação */}
-        <Card className="rounded-3xl border-border/70 shadow-sm flex flex-col justify-between">
-          <CardHeader>
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-600" />
-              Diretriz Clínica Soul
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Equilíbrio integral entre corpo, mente, relações e propósito
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-xs text-muted-foreground leading-relaxed">
-            <p>
-              A verdadeira saúde preventiva vai muito além de exames de sangue e pesagem. Ela se
-              ancora na harmonia dos <strong>11 aspectos da sua vida</strong>.
-            </p>
-            <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/50 space-y-2">
-              <span className="text-[11px] font-bold text-foreground block">
-                💡 Como interpretar sua Vida 360º:
+            <div className="text-right">
+              <span className="text-2xl font-black text-foreground">{globalScore}%</span>
+              <span className="text-[10px] block font-semibold text-muted-foreground">
+                Índice Global 360º
               </span>
-              <ul className="space-y-1.5 text-[11px]">
-                <li>
-                  • <strong>80-100%:</strong> Pilar nutrido e resiliente.
-                </li>
-                <li>
-                  • <strong>50-79%:</strong> Equilibrado com oportunidades de melhora.
-                </li>
-                <li>
-                  • <strong>Abaixo de 50%:</strong> Sugere sobrecarga ou afastamento.
-                </li>
-              </ul>
             </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <div className="h-72 sm:h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarData} outerRadius="75%">
+                <PolarGrid stroke="currentColor" className="text-muted/30" />
+                <PolarAngleAxis
+                  dataKey="subject"
+                  tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 600 }}
+                  className="text-foreground"
+                />
+                <PolarRadiusAxis
+                  angle={30}
+                  domain={[0, 100]}
+                  tick={{ fontSize: 9 }}
+                  stroke="currentColor"
+                  className="text-muted-foreground/50"
+                />
+                <Radar
+                  name="Equilíbrio"
+                  dataKey="score"
+                  stroke="#8b5cf6"
+                  fill="#8b5cf6"
+                  fillOpacity={0.4}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
 
-            {onOpenCheckin && (
-              <Button
-                onClick={onOpenCheckin}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-2xl h-11 shadow-sm gap-2 mt-2"
-              >
-                <Sparkles className="h-4 w-4" />
-                Fazer Check-in de Hoje
-              </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 pt-3 border-t border-border/50">
+            {bestAspect && (
+              <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/50">
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider block">
+                  Pilar mais Forte
+                </span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-base">{bestAspect.emoji}</span>
+                  <span className="text-xs font-bold text-foreground">{bestAspect.title}</span>
+                  <span className="text-xs font-black text-emerald-600 ml-auto">
+                    {bestAspectScore}%
+                  </span>
+                </div>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+
+            {attentionAspect && (
+              <div className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/50">
+                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider block">
+                  Ponto de Atenção
+                </span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-base">{attentionAspect.emoji}</span>
+                  <span className="text-xs font-bold text-foreground">{attentionAspect.title}</span>
+                  <span className="text-xs font-black text-amber-600 ml-auto">
+                    {attentionAspectScore}%
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Gráfico de Evolução Temporal no Período (Humor, Energia e Estresse) */}
       {timelineData.length > 0 && (
