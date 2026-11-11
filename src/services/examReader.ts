@@ -12,6 +12,7 @@ export interface ExamAnalysisResponse {
   success: boolean
   exam_id?: string
   exam_title?: string
+  exam_type?: string
   exam_date?: string
   laboratory?: string
   overall_status?: 'normal' | 'alterado'

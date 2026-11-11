@@ -35,6 +35,7 @@ const EXAM_TYPE_OPTIONS = [
   'Endoscopia',
   'Eletrocardiograma',
   'Raio-X',
+  'Detectar automaticamente pela IA',
   'Outro',
 ]
 
@@ -56,7 +57,7 @@ export default function ExamUploadSection() {
   const [uploading, setUploading] = useState(false)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
 
-  const [examType, setExamType] = useState(EXAM_TYPE_OPTIONS[0])
+  const [examType, setExamType] = useState(EXAM_TYPE_OPTIONS[EXAM_TYPE_OPTIONS.length - 2])
   const [customType, setCustomType] = useState('')
   const [examDate, setExamDate] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
@@ -122,11 +123,16 @@ export default function ExamUploadSection() {
       toast.error('Selecione um arquivo (PDF ou foto) para enviar.')
       return
     }
-    const type = examType === 'Outro' ? customType.trim() || 'Outro' : examType
+    const type =
+      examType === 'Outro'
+        ? customType.trim() || 'Outro'
+        : examType === 'Detectar automaticamente pela IA'
+          ? 'A detectar pela IA'
+          : examType
     setUploading(true)
     try {
       const created = await medicalService.createExam({
-        title: `${type} — ${examFile.name.replace(/\.[^.]+$/, '')}`,
+        title: examFile.name.replace(/\.[^.]+$/, '') || type,
         type,
         date: examDate || todayStr(),
         file: examFile,

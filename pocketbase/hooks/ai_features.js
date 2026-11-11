@@ -638,14 +638,27 @@ routerAdd(
       return e.json(401, { error: 'Autenticação necessária' })
     }
 
-    let data
-    try {
-      data = e.bindBody({})
-    } catch (_) {
-      return e.badRequestError('Corpo da requisição inválido. Envie JSON.')
-    }
+    // Corpo JSON: lido via requestInfo().body (bindBody lança no JSVM para
+    // objetos JS puros — mesma técnica do endpoint analyze-meal, que funciona).
+    const data = e.requestInfo().body || {}
 
     const examId = data && data.examId ? String(data.examId).trim() : ''
+
+    // Se examId foi fornecido, busca o registro do exame no banco
+    // (antes do ramo de imagens vazias, que também o consulta)
+    let examRecord = null
+    let examUserId = authRecord.id
+    if (examId) {
+      try {
+        examRecord = $app.findRecordById('exams', examId)
+        if (examRecord) {
+          examUserId = examRecord.getString('user') || authRecord.id
+        }
+      } catch (err) {
+        console.log('analyze-exam: exame não encontrado para id ' + examId + ': ' + err.message)
+      }
+    }
+
     let images = []
     if (data && Array.isArray(data.images)) {
       images = data.images.filter((img) => typeof img === 'string' && img.length > 0)
@@ -891,23 +904,11 @@ routerAdd(
       images = images.slice(0, MAX_PAGES)
     }
 
-    // Se examId foi fornecido, busca o registro do exame no banco
-    let examRecord = null
-    let examUserId = authRecord.id
-    if (examId) {
-      try {
-        examRecord = $app.findRecordById('exams', examId)
-        if (examRecord) {
-          examUserId = examRecord.getString('user') || authRecord.id
-        }
-      } catch (err) {
-        console.log('analyze-exam: exame não encontrado para id ' + examId + ': ' + err.message)
-      }
-    }
-
     const systemPrompt =
       'Você é um médico patologista clínico e especialista em medicina diagnóstica da Clínica Soul com visão computacional de alta precisão. ' +
-      'Você receberá páginas digitalizadas/fotos em alta nitidez de um laudo de exame laboratorial (ex: Hemograma completo, Perfil Lipídico, Bioquímica, Hormônios etc.). ' +
+      'Você receberá páginas digitalizadas/fotos em alta nitidez de um laudo de exame (pode ser laboratorial — Hemograma completo, Perfil Lipídico, Bioquímica, Hormônios — ou de imagem: Ressonância, Tomografia, Ultrassom, Endoscopia, Eletrocardiograma, Raio-X etc.). ' +
+      'Antes de extrair, IDENTIFIQUE sozinho do que o documento se trata e preencha "exam_title" e "exam_type" de acordo (ex: "Hemograma Completo", "Perfil Lipídico", "Ressonância Magnética de Lombar", "Endoscopia Digestiva Alta"). ' +
+      'Se for um laudo de imagem/imagemológica, extraia como "biomarkers" apenas os achados mensuráveis citados (medidas, graus, dimensões), e capriche no "summary_text" com a conclusão do radiologista. ' +
       'Sua missão é extrair com precisão absoluta TODOS os marcadores medidos, valores numéricos exatos, unidades e faixas de referência que constam no documento. ' +
       'Diretrizes obrigatórias:\n' +
       '1. Extraia cada biomarcador individualmente (ex: Hemácias/Eritrócitos, Hemoglobina, Hematócrito, VCM, HCM, CHCM, RDW, Leucócitos totais, Neutrófilos, Linfócitos, Monócitos, Eosinófilos, Basófilos, Plaquetas, Glicose, Colesterol etc.).\n' +
@@ -920,6 +921,7 @@ routerAdd(
       'Responda ESTRITAMENTE em JSON válido, sem texto fora do JSON, no formato:\n' +
       '{\n' +
       '  "exam_title": "Hemograma Completo",\n' +
+      '  "exam_type": "Exame de Sangue",\n' +
       '  "exam_date": "2026-11-07",\n' +
       '  "laboratory": "Nome do Laboratório",\n' +
       '  "overall_status": "normal" | "alterado",\n' +
@@ -1090,6 +1092,27 @@ routerAdd(
     const labName =
       parsed.laboratory && typeof parsed.laboratory === 'string' ? parsed.laboratory.trim() : ''
     const overallStatus = parsed.overall_status === 'alterado' ? 'alterado' : 'normal'
+    const aiExamTitle =
+      parsed.exam_title && typeof parsed.exam_title === 'string' ? parsed.exam_title.trim() : ''
+    const aiExamType =
+      parsed.exam_type && typeof parsed.exam_type === 'string' ? parsed.exam_type.trim() : ''
+
+    // Detecta o tipo/área do exame pela IA e reflete no título do registro
+    // (Sources e Exames & Dietas leem deste campo). Só substitui o título
+    // genérico do upload quando a IA identifica algo mais específico.
+    if (examRecord && (aiExamTitle || aiExamType)) {
+      try {
+        const detectedType = aiExamType || aiExamTitle
+        examRecord.set('type', detectedType)
+        if (aiExamTitle && examRecord.getString('title') !== aiExamTitle) {
+          examRecord.set('title', aiExamTitle)
+        }
+        $app.save(examRecord)
+        console.log('analyze-exam: exame ' + examId + ' retitulado pela IA: ' + detectedType)
+      } catch (err) {
+        console.log('analyze-exam: erro ao salvar tipo/título detectado: ' + err.message)
+      }
+    }
 
     // 1. Atualiza o registro em exams se houver examId
     if (examRecord) {
@@ -1198,7 +1221,8 @@ routerAdd(
     return e.json(200, {
       success: true,
       exam_id: examId,
-      exam_title: examTitleHint,
+      exam_title: aiExamTitle || examTitleHint,
+      exam_type: aiExamType,
       exam_date: examDate,
       laboratory: labName,
       overall_status: overallStatus,
