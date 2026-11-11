@@ -140,6 +140,28 @@ export const PreventiveScoreCard: React.FC<PreventiveScoreCardProps> = ({
           </div>
         </div>
 
+        {/* Conceito da Escala — bloco informativo Guava */}
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-950/30 p-4 sm:p-5 shadow-xs">
+          <div className="mt-0.5 shrink-0 p-2 rounded-xl bg-emerald-100/80 dark:bg-emerald-900/50">
+            <Sparkles className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+          </div>
+          <div className="space-y-2 min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              O conceito da escala
+            </p>
+            <p className="text-sm text-foreground/90 leading-relaxed">
+              É um sistema que categoriza os cuidados em relação a sua saúde física, emocional e
+              comportamentais para evitar o surgimento, o desenvolvimento ou as complicações de
+              doenças. O principal objetivo dessa escala é agir antes que a enfermidade se torne
+              grave.
+            </p>
+            <p className="text-sm text-foreground/90 leading-relaxed">
+              É uma métrica dinâmica automatizada que mede o quanto você está em dia com as
+              diretrizes científicas de prevenção e longevidade.
+            </p>
+          </div>
+        </div>
+
         {/* Os 3 Pilares em Cards Rápidos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
           <PillarSummaryCard
