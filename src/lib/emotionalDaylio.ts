@@ -582,14 +582,23 @@ export function filterLogsByScope(
   }
 
   if (scope === 'mensal') {
-    // mês do targetDate (ex: 2026-11)
-    const ym = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`
-    return logs.filter((l) => (l.date || '').startsWith(ym))
+    // últimos 30 dias
+    const past30 = new Date(targetDate.getTime() - 29 * 86400000)
+    const startStr = dStr(past30)
+    return logs.filter((l) => {
+      const d = (l.date || '').slice(0, 10)
+      return d >= startStr && d <= targetDay
+    })
   }
 
   if (scope === 'anual') {
-    const y = `${targetDate.getFullYear()}`
-    return logs.filter((l) => (l.date || '').startsWith(y))
+    // últimos 365 dias
+    const past365 = new Date(targetDate.getTime() - 364 * 86400000)
+    const startStr = dStr(past365)
+    return logs.filter((l) => {
+      const d = (l.date || '').slice(0, 10)
+      return d >= startStr && d <= targetDay
+    })
   }
 
   return logs

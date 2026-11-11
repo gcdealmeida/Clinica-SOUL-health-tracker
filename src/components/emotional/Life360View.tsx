@@ -64,22 +64,24 @@ export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin })
   const attentionAspect = sortedAspects[sortedAspects.length - 1]?.aspect
   const attentionAspectScore = sortedAspects[sortedAspects.length - 1]?.score ?? 0
 
-  // Linha do tempo dos últimos registros para gráfico de evolução
+  // Linha do tempo dos registros para gráfico de evolução conforme o período selecionado
   const timelineData = [...filteredLogs]
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-    .slice(-14)
     .map((log) => ({
       date: (log.date || '').slice(5, 10),
+      fullDate: log.date || '',
       humor: (log.mood_score || 3) * 20,
       energia: (log.energy_level || 3) * 20,
       estresse: (6 - (log.stress_level || 3)) * 20, // invertido para quanto maior, melhor
+      humorRaw: log.mood_score || 3,
+      label: log.mood_label || 'Check-in',
     }))
 
   const periodLabels: Record<'day' | 'week' | 'month' | 'year', { title: string; desc: string }> = {
-    day: { title: 'Hoje', desc: 'Percepção imediata do dia' },
-    week: { title: 'Últimos 7 dias', desc: 'Média e equilíbrio da última semana' },
-    month: { title: 'Últimos 30 dias', desc: 'Tendência consolidada do mês' },
-    year: { title: 'Último ano', desc: 'Visão macro e consistência anual' },
+    day: { title: 'Hoje (Dia)', desc: 'Percepção imediata do dia atual' },
+    week: { title: 'Últimos 7 dias (Semana)', desc: 'Média e equilíbrio da última semana' },
+    month: { title: 'Últimos 30 dias (Mês)', desc: 'Tendência consolidada do mês' },
+    year: { title: 'Último ano (Ano)', desc: 'Visão macro e consistência anual' },
   }
 
   return (
@@ -106,10 +108,10 @@ export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin })
         <div className="inline-flex p-1 bg-muted/60 rounded-2xl border border-border/50 self-stretch sm:self-auto justify-between">
           {(
             [
-              { id: 'day', label: 'Diário' },
-              { id: 'week', label: 'Semanal' },
-              { id: 'month', label: 'Mensal' },
-              { id: 'year', label: 'Anual' },
+              { id: 'day', label: 'Dia' },
+              { id: 'week', label: 'Semana' },
+              { id: 'month', label: 'Mês' },
+              { id: 'year', label: 'Ano' },
             ] as const
           ).map((p) => {
             const active = period === p.id
@@ -263,6 +265,111 @@ export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin })
           </CardContent>
         </Card>
       </div>
+
+      {/* Gráfico de Evolução Temporal no Período (Humor, Energia e Estresse) */}
+      {timelineData.length > 0 && (
+        <Card className="rounded-3xl border-border/70 shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  Evolução no Período ({periodLabels[period].title})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Acompanhamento de humor, vitalidade e controle do estresse ({timelineData.length}{' '}
+                  ponto{timelineData.length > 1 ? 's' : ''})
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-semibold">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Humor
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Energia
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full bg-violet-500 inline-block" /> Estresse
+                  Zen
+                </span>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={timelineData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="currentColor"
+                    className="text-muted/20"
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: 'currentColor', fontSize: 11 }}
+                    stroke="currentColor"
+                    className="text-muted-foreground"
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    tick={{ fill: 'currentColor', fontSize: 10 }}
+                    stroke="currentColor"
+                    className="text-muted-foreground"
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const item = payload[0].payload as (typeof timelineData)[0]
+                      return (
+                        <div className="bg-popover border border-border p-2.5 rounded-xl shadow-md text-xs space-y-1">
+                          <p className="font-bold text-foreground">
+                            {item.fullDate || item.date} • {item.label}
+                          </p>
+                          <p className="text-emerald-600 font-semibold">
+                            Humor: {item.humorRaw}/5 ({item.humor}%)
+                          </p>
+                          <p className="text-amber-600 font-semibold">Energia: {item.energia}%</p>
+                          <p className="text-violet-600 font-semibold">
+                            Estresse (serenidade): {item.estresse}%
+                          </p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="humor"
+                    name="Humor"
+                    stroke="#10b981"
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: '#10b981' }}
+                    activeDot={{ r: 5 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="energia"
+                    name="Energia"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    dot={{ r: 2.5, fill: '#f59e0b' }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="estresse"
+                    name="Estresse Zen"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    dot={{ r: 2.5, fill: '#8b5cf6' }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Grid com os 11 Aspectos da Vida — Cards ilustrativos carinhosos */}
       <div className="space-y-3">

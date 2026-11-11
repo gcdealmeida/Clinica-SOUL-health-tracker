@@ -10,6 +10,7 @@ import { todayStr } from '@/lib/localDate'
 import { DaylioCheckinModal } from '@/components/emotional/DaylioCheckinModal'
 import { DaylioHistoryCard } from '@/components/emotional/DaylioHistoryCard'
 import { Life360View } from '@/components/emotional/Life360View'
+import { useSearchParams } from 'react-router-dom'
 import {
   Sparkles,
   Calendar,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react'
 
 export const EmotionalDiaryPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [logs, setLogs] = useState<EmotionalLog[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'360' | 'history'>('360')
@@ -47,6 +49,19 @@ export const EmotionalDiaryPage: React.FC = () => {
   useEffect(() => {
     fetchLogs()
   }, [])
+
+  // Suporte a deep-link: /diario-emocional?checkin=1 abre direto o modal do dia
+  useEffect(() => {
+    if (searchParams.get('checkin') === '1' || searchParams.get('checkin') === 'true') {
+      // Se tiver log de hoje, preenche para edição, senão novo
+      setEditingLog(todayLog || null)
+      setCheckinOpen(true)
+      // Limpa a query param sem recarregar para manter a URL limpa
+      const nextParams = new URLSearchParams(searchParams)
+      nextParams.delete('checkin')
+      setSearchParams(nextParams, { replace: true })
+    }
+  }, [searchParams, todayLog, setSearchParams])
 
   const handleOpenNewCheckin = () => {
     setEditingLog(todayLog || null)
@@ -144,7 +159,7 @@ export const EmotionalDiaryPage: React.FC = () => {
         </div>
 
         {/* Abas Superiores: Vida 360º vs Histórico Daylio */}
-        <div className="flex items-center justify-between border-b border-border/80 pb-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-border/80 pb-3 gap-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -172,6 +187,15 @@ export const EmotionalDiaryPage: React.FC = () => {
               <span>Histórico Daylio ({logs.length})</span>
             </button>
           </div>
+
+          <Button
+            onClick={handleOpenNewCheckin}
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs gap-1.5 shadow-sm"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Fazer Check-in de Hoje
+          </Button>
         </div>
 
         {/* Conteúdo da Aba Ativa */}

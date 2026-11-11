@@ -444,52 +444,76 @@ export default function HomePage() {
           <SymptomsCard metrics={metrics} onChanged={loadAll} />
         </div>
 
-        {/* Diário do dia + resumo da semana */}
+        {/* Diário emocional — 2 links de redirecionamento: Abrir Diário e Fazer Check-In */}
         <Card className="border-border/60">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <CardTitle className="text-sm flex items-center gap-1.5">
                 <Smile className="h-4 w-4 text-violet-600" />
                 Diário emocional
               </CardTitle>
-              <CardDescription className="text-[11px]">Hoje e resumo da semana</CardDescription>
+              <CardDescription className="text-[11px]">
+                Registro diário e acompanhamento da Vida 360º
+              </CardDescription>
             </div>
-            <Link to="/diario-emocional" className="text-xs text-violet-600 hover:underline">
-              Abrir diário
-            </Link>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-8 text-xs font-semibold text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700 dark:border-violet-800 dark:hover:bg-violet-950/40"
+              >
+                <Link to="/diario-emocional">Abrir Diário</Link>
+              </Button>
+              <Button
+                size="sm"
+                asChild
+                className="h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+              >
+                <Link to="/diario-emocional?checkin=1">Fazer Check-In</Link>
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3 pt-1">
             {todayDiary ? (
               <div className="rounded-xl bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900 p-3 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold">{todayDiary.mood_label}</span>
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <span>{todayDiary.mood_label || 'Check-in realizado'}</span>
+                  </span>
                   <Badge
                     variant="outline"
-                    className="text-[10px] border-violet-200 text-violet-700"
+                    className="text-[10px] border-violet-200 text-violet-700 bg-white/60 dark:bg-background/60"
                   >
-                    {todayDiary.mood_score}/5
+                    Humor: {todayDiary.mood_score}/5
                   </Badge>
                 </div>
                 {todayDiary.affecting_factors && (
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">
                     {todayDiary.affecting_factors}
                   </p>
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed p-3">
-                <p className="text-xs text-muted-foreground">Nenhum check-in hoje ainda.</p>
-                <Button size="sm" variant="outline" onClick={() => navigate('/diario-emocional')}>
-                  Fazer check-in
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-dashed border-border/80 p-3 bg-muted/20">
+                <p className="text-xs text-muted-foreground">
+                  Nenhum check-in registrado hoje ainda. Que tal registrar como você se sente agora?
+                </p>
+                <Button
+                  size="sm"
+                  asChild
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold h-8 shrink-0"
+                >
+                  <Link to="/diario-emocional?checkin=1">Fazer Check-In</Link>
                 </Button>
               </div>
             )}
 
             {emoSummary.logs.length > 0 && (
-              <div className="flex flex-wrap items-center gap-3 mt-3 text-[11px] text-muted-foreground">
-                <span className="font-medium text-foreground">Semana:</span>
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-muted-foreground border-t border-border/40">
+                <span className="font-semibold text-foreground">Últimos 7 dias:</span>
                 <span>
-                  Humor médio{' '}
+                  Humor{' '}
                   <b className="text-foreground">
                     {emoSummary.avgMood ? emoSummary.avgMood.toFixed(1) : '--'}/5
                   </b>
@@ -506,7 +530,9 @@ export default function HomePage() {
                     {emoSummary.avgStress ? emoSummary.avgStress.toFixed(1) : '--'}/5
                   </b>
                 </span>
-                <span>({emoSummary.logs.length} registros)</span>
+                <span className="ml-auto text-[10px] text-muted-foreground/80">
+                  {emoSummary.logs.length} registro(s)
+                </span>
               </div>
             )}
           </CardContent>
