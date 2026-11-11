@@ -23,7 +23,6 @@ import { mealService } from '@/services/mealsAndAi'
 import { loadDashboardPreferences } from '@/services/preferences'
 import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/preventiveScore'
 
-import { BasicInfoSection } from '@/components/profile/BasicInfoSection'
 import { PreventiveScoreCard } from '@/components/profile/PreventiveScoreCard'
 import {
   ProfileOverviewHeader,
@@ -300,14 +299,6 @@ export const ProfilePage: React.FC = () => {
     navigate('/diario-emocional')
   }
 
-  // Handlers para Basic Info
-  const handleSaveBasic = async (patch: Partial<UserBasicProfile>) => {
-    if (!user) return
-    await profileService.updateBasicProfile(patch, user.id)
-    const updated = await profileService.getBasicProfile(user.id)
-    setBasicProfile(updated)
-  }
-
   // Handlers para Biomarcadores
   const handleAddBiomarker = async (
     item: Omit<ProfileBiomarker, 'id' | 'user' | 'created' | 'updated'>,
@@ -471,9 +462,6 @@ export const ProfilePage: React.FC = () => {
                   vaccinations={vaccinations}
                   lifestyle={lifestyle}
                 />
-                {basicProfile && (
-                  <BasicInfoSection profile={basicProfile} onSave={handleSaveBasic} />
-                )}
               </div>
             )}
 
