@@ -1,6 +1,45 @@
 import pb from '@/lib/pocketbase/client'
 import { Exam, Diet, MedicalRecord } from '@/types'
 
+/** Mapeia um registro da coleção exams (inclui os campos de análise assíncrona). */
+function mapExamRecord(r: any): Exam {
+  let analysisStats: Exam['analysis_stats'] = null
+  try {
+    analysisStats =
+      typeof r.analysis_stats === 'string' && r.analysis_stats
+        ? JSON.parse(r.analysis_stats)
+        : r.analysis_stats || null
+  } catch {
+    analysisStats = null
+  }
+  let analysisProgress: Exam['analysis_progress'] = null
+  try {
+    analysisProgress =
+      typeof r.analysis_progress === 'string' && r.analysis_progress
+        ? JSON.parse(r.analysis_progress)
+        : r.analysis_progress || null
+  } catch {
+    analysisProgress = null
+  }
+  return {
+    id: r.id,
+    user: r.user,
+    title: r.title,
+    type: r.type,
+    date: r.date,
+    laboratory: r.laboratory,
+    summary_results: r.summary_results,
+    file: r.file ? pb.files.getURL(r, r.file) : undefined,
+    status: r.status,
+    analysis_status: r.analysis_status || undefined,
+    analysis_error: r.analysis_error || undefined,
+    analysis_stats: analysisStats,
+    analysis_progress: analysisProgress,
+    created: r.created,
+    updated: r.updated,
+  }
+}
+
 export const medicalService = {
   // Medical records (cirurgias, alergias)
   async listMedicalRecords(userId?: string): Promise<MedicalRecord[]> {
@@ -75,19 +114,7 @@ export const medicalService = {
       sort: '-date',
     })
 
-    return records.map((r) => ({
-      id: r.id,
-      user: r.user,
-      title: r.title,
-      type: r.type,
-      date: r.date,
-      laboratory: r.laboratory,
-      summary_results: r.summary_results,
-      file: r.file ? pb.files.getURL(r, r.file) : undefined,
-      status: r.status,
-      created: r.created,
-      updated: r.updated,
-    }))
+    return records.map((r) => mapExamRecord(r))
   },
 
   async createExam(data: {
@@ -116,19 +143,7 @@ export const medicalService = {
 
     const r = await pb.collection('exams').create(formData)
 
-    return {
-      id: r.id,
-      user: r.user,
-      title: r.title,
-      type: r.type,
-      date: r.date,
-      laboratory: r.laboratory,
-      summary_results: r.summary_results,
-      file: r.file ? pb.files.getURL(r, r.file) : undefined,
-      status: r.status,
-      created: r.created,
-      updated: r.updated,
-    }
+    return mapExamRecord(r)
   },
 
   async deleteExam(id: string): Promise<void> {

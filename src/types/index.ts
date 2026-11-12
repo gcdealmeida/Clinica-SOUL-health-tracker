@@ -226,6 +226,25 @@ export interface EmotionalLog {
   updated: string
 }
 
+export type ExamAnalysisStatus = 'running' | 'done' | 'error' | ''
+
+/** Progresso assíncrono da leitura por IA (JSON em exams.analysis_progress). */
+export interface ExamAnalysisProgress {
+  total_pages: number
+  pages_done: number
+  attempts?: number
+  summaries?: string[]
+  biomarkers?: Array<{ name: string; value: string; unit?: string; reference_range?: string }>
+}
+
+/** Contadores finais gravados quando a análise assíncrona conclui (analysis_stats). */
+export interface ExamAnalysisStats {
+  extracted: number
+  created: number
+  updated: number
+  pages_analyzed: number
+}
+
 export interface Exam {
   id: string
   user: string
@@ -236,6 +255,11 @@ export interface Exam {
   summary_results?: string
   file?: string
   status?: 'normal' | 'alterado' | 'pendente'
+  analysis_status?: ExamAnalysisStatus
+  analysis_error?: string
+  analysis_started_at?: string
+  analysis_stats?: ExamAnalysisStats | null
+  analysis_progress?: ExamAnalysisProgress | null
   created: string
   updated: string
 }

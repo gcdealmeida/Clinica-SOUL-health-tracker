@@ -1,6 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { medicalService } from '@/services/medical'
-import { runExamAnalysisWithRetry } from '@/services/examReader'
+import {
+  runExamAnalysisWithRetry,
+  markExamAnalysisQueued,
+  fetchExamAnalysisResult,
+} from '@/services/examReader'
+import { startAsyncExamAnalysis } from '@/services/examAsync'
+import { pollExamAnalysis, progressPercent } from '@/services/examStatus'
+import type { ExamStatusSnapshot } from '@/services/examStatus'
 import { Exam } from '@/types'
 import { todayStr } from '@/lib/localDate'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,14 +24,17 @@ import {
   Sparkles,
   Loader2,
   FileWarning,
+  AlertTriangle,
 } from 'lucide-react'
 
 /**
  * Área "Upload Files / Downloads Exames" da página Sources.
- * Reutiliza o pipeline existente de leitura inteligente de exames (v0.0.31):
- * preparação das páginas client-side (examReader) + endpoint /backend/v1/ai/analyze-exam,
- * que transcreve o laudo em exams.summary_results e grava os marcadores em profile_biomarkers.
- * Os arquivos vão para a mesma coleção `exams`, então aparecem também em Exames & Dietas.
+ * v0.0.64: leitura por IA ASSÍNCRONA — o cliente enfileira as páginas
+ * (analyze-exam-async, 202 imediato) e o servidor processa em segundo plano
+ * (cron runner). O app acompanha com polling em exams.analysis_status:
+ * - card mostra "Analisando…" com progresso de páginas enquanto roda;
+ * - se o usuário sair e voltar, a análise em curso é retomada ao montar;
+ * - erro do processamento aparece amigável no card (nunca "Failed to fetch").
  */
 
 const EXAM_TYPE_OPTIONS = [
@@ -38,6 +48,10 @@ const EXAM_TYPE_OPTIONS = [
   'Detectar automaticamente pela IA',
   'Outro',
 ]
+
+/** Intervalo de polling e teto de acompanhamento (o servidor tem o seu próprio). */
+const POLL_INTERVAL_MS = 3000
+const POLL_TIMEOUT_MS = 5 * 60 * 1000
 
 function fileIconFor(fileUrl?: string, title?: string) {
   const isPdf =
@@ -55,62 +69,163 @@ export default function ExamUploadSection() {
   const [exams, setExams] = useState<Exam[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null)
+  /** Exames em análise no cliente + snapshot de progresso por exame. */
+  const [analyzing, setAnalyzing] = useState<Record<string, ExamStatusSnapshot>>({})
+  const [examError, setExamError] = useState<Record<string, string>>({})
 
   const [examType, setExamType] = useState(EXAM_TYPE_OPTIONS[EXAM_TYPE_OPTIONS.length - 2])
   const [customType, setCustomType] = useState('')
   const [examDate, setExamDate] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  /** Pollers ativos — sobrevivem a re-render e são parados no unmount. */
+  const pollersRef = useRef<Map<string, { stop: () => void }>>(new Map())
 
-  const loadExams = async () => {
+  const loadExams = useCallback(async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setExams(await medicalService.listExams())
     } catch (err) {
       console.error(err)
-      toast.error('Erro ao carregar a lista de exames')
+      if (!silent) toast.error('Erro ao carregar a lista de exames')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
+  }, [])
+
+  const isAnalyzing = (exam: Exam) =>
+    analyzing[exam.id] !== undefined || exam.analysis_status === 'running'
+
+  const analysisErrorFor = (exam: Exam) =>
+    exam.analysis_status === 'error'
+      ? exam.analysis_error || 'A leitura por IA falhou neste exame.'
+      : examError[exam.id]
+
+  const progressFor = (exam: Exam): string | null => {
+    const snap = analyzing[exam.id]
+    if (snap?.progress) {
+      const pct = progressPercent(snap.progress)
+      if (pct !== null) return `Analisando... ${pct}%`
+      return `Analisando... página ${snap.progress.pages_done + 1} de ${snap.progress.total_pages}`
+    }
+    return 'Analisando...'
   }
 
+  /** Acompanha um exame que o SERVIDOR já está processando (status 'running'). */
+  const trackExam = useCallback(
+    (examId: string) => {
+      if (pollersRef.current.has(examId)) return
+      setAnalyzing((prev) => ({ ...prev, [examId]: prev[examId] ?? { status: 'running' } }))
+      const { promise, stop } = pollExamAnalysis(examId, {
+        intervalMs: POLL_INTERVAL_MS,
+        timeoutMs: POLL_TIMEOUT_MS,
+        onTick: (snap) => setAnalyzing((prev) => ({ ...prev, [examId]: snap })),
+      })
+      pollersRef.current.set(examId, { stop })
+      promise
+        .then(async (snap) => {
+          pollersRef.current.delete(examId)
+          setAnalyzing((prev) => {
+            const next = { ...prev }
+            delete next[examId]
+            return next
+          })
+          if (snap.status === 'error') {
+            const msg = snap.error || 'A leitura por IA falhou neste exame.'
+            setExamError((prev) => ({ ...prev, [examId]: msg }))
+            toast.error(msg)
+          } else {
+            try {
+              const result = await fetchExamAnalysisResult(examId)
+              if (result.biomarkers_extracted > 0) {
+                toast.success(
+                  `IA extraiu ${result.biomarkers_extracted} marcador(es) do laudo: ${result.biomarkers_created} novo(s) em Biomarkers, ${result.biomarkers_updated} atualizado(s).`,
+                )
+              } else {
+                toast.success('Exame processado pela IA: resumo do laudo atualizado.')
+              }
+            } catch {
+              toast.success('Exame processado pela IA.')
+            }
+          }
+          await loadExams(true)
+        })
+        .catch((err) => {
+          pollersRef.current.delete(examId)
+          setAnalyzing((prev) => {
+            const next = { ...prev }
+            delete next[examId]
+            return next
+          })
+          if (err?.message === 'timeout') {
+            setExamError((prev) => ({
+              ...prev,
+              [examId]:
+                'A análise demorou mais de 5 minutos — o servidor pode ainda estar processando. Recarregue a página em instantes para ver o resultado.',
+            }))
+          } else {
+            console.warn('pollExamAnalysis interrompido:', err)
+          }
+        })
+    },
+    [loadExams],
+  )
+
+  // Retomada: ao montar, exames com analysis_status='running' voltam a ser
+  // acompanhados (o servidor continua processando em segundo plano).
   useEffect(() => {
-    loadExams()
-  }, [])
+    let alive = true
+    loadExams().then(() => {
+      if (!alive) return
+      setExams((current) => {
+        current.filter((e) => e.analysis_status === 'running').forEach((e) => trackExam(e.id))
+        return current
+      })
+    })
+    return () => {
+      alive = false
+      pollersRef.current.forEach((p) => p.stop())
+      pollersRef.current.clear()
+    }
+  }, [loadExams, trackExam])
 
   const handleAnalyze = async (exam: Exam) => {
     if (!exam.file) {
       toast.error('Este exame não possui arquivo anexado para leitura.')
       return
     }
-    setAnalyzingId(exam.id)
+    if (isAnalyzing(exam)) return
+    // Indicador imediato no card (antes mesmo do 202 voltar).
+    trackExam(exam.id)
+    setExamError((prev) => ({ ...prev, [exam.id]: '' }))
     try {
-      toast.info('Iniciando leitura inteligente do exame com IA...')
-      const result = await runExamAnalysisWithRetry({
+      toast.info('Leitura inteligente iniciada — processando em segundo plano...')
+      await markExamAnalysisQueued(exam.id)
+      await startAsyncExamAnalysis({
         examId: exam.id,
         fileUrlOrFile: exam.file,
         title: exam.title,
         onProgress: (msg) => toast.info(msg),
       })
-      if (result.success && result.biomarkers_extracted > 0) {
-        toast.success(
-          `IA extraiu ${result.biomarkers_extracted} marcador(es) do laudo: ${result.biomarkers_created} novo(s) em Biomarkers, ${result.biomarkers_updated} atualizado(s).`,
-        )
-      } else {
-        toast.success('Exame processado pela IA: resumo do laudo atualizado.')
-      }
-      await loadExams()
+      // Polling já em curso via trackExam — nada mais a fazer aqui.
     } catch (err: any) {
-      console.error(err)
+      // Falha ao enfileirar (rede/gateway após a escada de resolução):
+      // para o spinner e mostra erro amigável — nunca "Failed to fetch".
+      pollersRef.current.get(exam.id)?.stop()
+      pollersRef.current.delete(exam.id)
+      setAnalyzing((prev) => {
+        const next = { ...prev }
+        delete next[exam.id]
+        return next
+      })
       const msg =
         err?.response?.error ||
         err?.response?.message ||
         err?.message ||
-        'Não foi possível analisar o exame com IA neste momento.'
-      toast.error(typeof msg === 'string' ? msg : 'Erro ao processar exame com IA')
-    } finally {
-      setAnalyzingId(null)
+        'Não foi possível iniciar a análise com IA neste momento. Tente novamente.'
+      setExamError((prev) => ({ ...prev, [exam.id]: String(msg) }))
+      toast.error(typeof msg === 'string' ? msg : 'Erro ao iniciar a análise com IA')
+      await loadExams(true) // garante lista consistente
     }
   }
 
@@ -140,30 +255,33 @@ export default function ExamUploadSection() {
       if (fileInputRef.current) fileInputRef.current.value = ''
       toast.success('Exame enviado! Iniciando leitura automática com IA...')
 
-      // Leitura automática: mesmo pipeline dos cards de exames (Exames & Dietas),
-      // com retry adaptativo de resolução e lotes de páginas.
-      let analysisFailed = false
+      // Mesmo fluxo assíncrono da reanálise: enfileira + polling no card novo.
+      trackExam(created.id)
       try {
-        const aiRes = await runExamAnalysisWithRetry({
+        await startAsyncExamAnalysis({
           examId: created.id,
           fileUrlOrFile: examFile,
           title: created.title,
           onProgress: (msg) => toast.info(msg),
         })
-        if (aiRes.biomarkers_extracted > 0) {
-          toast.success(
-            `IA extraiu ${aiRes.biomarkers_extracted} marcador(es) do laudo: ${aiRes.biomarkers_created} novo(s) em Biomarkers, ${aiRes.biomarkers_updated} atualizado(s).`,
-          )
-        } else {
-          toast.success('IA gerou o resumo descritivo do laudo.')
-        }
       } catch (aiErr) {
-        analysisFailed = true
-        console.warn('Leitura automática falhou:', aiErr)
+        pollersRef.current.get(created.id)?.stop()
+        pollersRef.current.delete(created.id)
+        setAnalyzing((prev) => {
+          const next = { ...prev }
+          delete next[created.id]
+          return next
+        })
+        const msg =
+          aiErr?.response?.error ||
+          aiErr?.message ||
+          'Não foi possível iniciar a leitura automática. Use "Reanalisar com IA" para tentar novamente.'
+        setExamError((prev) => ({ ...prev, [created.id]: String(msg) }))
         toast.warning('Exame salvo. Use "Reanalisar com IA" para tentar a leitura novamente.')
+        console.warn('Leitura automática falhou:', aiErr)
       }
 
-      await loadExams()
+      await loadExams(true)
     } catch (err) {
       console.error(err)
       toast.error('Erro ao enviar o exame. Verifique o arquivo e tente novamente.')
@@ -194,8 +312,8 @@ export default function ExamUploadSection() {
         </CardTitle>
         <CardDescription className="text-xs">
           Envie exames em PDF ou foto (sangue, ressonância, endoscopia, eletrocardiograma,
-          ultrassom…). A IA lê o laudo automaticamente e os valores quantitativos são gravados em
-          Biomarkers — e o arquivo original fica guardado aqui para download.
+          ultrassom…). A IA lê o laudo em segundo plano e os valores quantitativos são gravados em
+          Biomarkers — o arquivo original fica guardado aqui para download.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -300,7 +418,10 @@ export default function ExamUploadSection() {
             <div className="space-y-2">
               {exams.map((exam) => {
                 const Icon = fileIconFor(exam.file, exam.title)
+                const analyzingNow = isAnalyzing(exam)
                 const analyzed = !!exam.summary_results
+                const errorMsg = analysisErrorFor(exam)
+                const progressMsg = analyzingNow ? progressFor(exam) : null
                 return (
                   <div
                     key={exam.id}
@@ -317,18 +438,34 @@ export default function ExamUploadSection() {
                         <Badge
                           variant="outline"
                           className={
-                            analyzed
-                              ? 'text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'text-[10px] bg-amber-50 text-amber-700 border-amber-200'
+                            analyzingNow
+                              ? 'text-[10px] bg-blue-50 text-blue-700 border-blue-200'
+                              : analyzed
+                                ? 'text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'text-[10px] bg-amber-50 text-amber-700 border-amber-200'
                           }
                         >
-                          {analyzed ? 'Lido pela IA' : 'Aguardando leitura'}
+                          {analyzingNow
+                            ? 'Analisando…'
+                            : analyzed
+                              ? 'Lido pela IA'
+                              : 'Aguardando leitura'}
                         </Badge>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
                         {exam.type} • {exam.date || 'sem data'}
                       </p>
-                      {analyzed ? (
+                      {analyzingNow ? (
+                        <div className="bg-blue-50/60 dark:bg-blue-950/30 p-2 rounded-lg text-[11px] text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                          {progressMsg}
+                        </div>
+                      ) : errorMsg ? (
+                        <div className="bg-red-50/70 dark:bg-red-950/30 p-2 rounded-lg text-[11px] text-red-700 dark:text-red-300 flex items-start gap-1.5">
+                          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                          <span>{errorMsg}</span>
+                        </div>
+                      ) : analyzed ? (
                         <div className="bg-muted/40 p-2 rounded-lg text-[11px] text-foreground/85 whitespace-pre-line max-h-32 overflow-y-auto">
                           {exam.summary_results}
                         </div>
@@ -343,14 +480,14 @@ export default function ExamUploadSection() {
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={analyzingId === exam.id || !exam.file}
+                        disabled={analyzingNow || !exam.file}
                         onClick={() => handleAnalyze(exam)}
                         className="h-7 px-2 text-[11px] gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
                       >
-                        {analyzingId === exam.id ? (
+                        {analyzingNow ? (
                           <>
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            Lendo...
+                            Analisando…
                           </>
                         ) : (
                           <>

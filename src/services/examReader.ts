@@ -459,6 +459,45 @@ export async function analyzeExamWithAi(opts: {
   })
 }
 
+/**
+ * Marca o exame como "análise enfileirada" (status assíncrono 'running') ANTES
+ * do upload em pedaços — a UI mostra "Analisando..." desde o primeiro clique.
+ * Se o hook assíncrono não estiver disponível (backend antigo), segue com o
+ * campo `status` do exame.
+ */
+export async function markExamAnalysisQueued(examId: string): Promise<void> {
+  try {
+    await pb.collection('exams').update(examId, { analysis_status: 'running' })
+  } catch (err) {
+    console.warn('markExamAnalysisQueued: falhou (seguindo sem status local)', err)
+  }
+}
+
+/**
+ * Resultado consolidado da análise assíncrona (chamado quando o polling vê
+ * analysis_status='done'): lê os contadores finais gravados no exame.
+ */
+export async function fetchExamAnalysisResult(examId: string): Promise<ExamAnalysisResponse> {
+  const r = await pb.collection('exams').getOne(examId)
+  let stats: any = null
+  try {
+    stats = typeof r.analysis_stats === 'string' ? JSON.parse(r.analysis_stats) : r.analysis_stats
+  } catch {
+    stats = null
+  }
+  return {
+    success: true,
+    summary: r.summary_results || '',
+    exam_title: r.title,
+    exam_type: r.type,
+    biomarkers: [],
+    biomarkers_extracted: stats?.extracted ?? 0,
+    biomarkers_created: stats?.created ?? 0,
+    biomarkers_updated: stats?.updated ?? 0,
+    pages_analyzed: stats?.pages_analyzed ?? 0,
+  }
+}
+
 // pdf.js é carregado sob demanda de CDN (não é dependência npm do projeto).
 const PDFJS_VERSION = '4.10.38'
 const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`
