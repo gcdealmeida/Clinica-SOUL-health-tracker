@@ -545,13 +545,9 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
           consolidated = true
           break
         }
-        // Erro transitório do gateway: persiste o progresso e tenta no próximo tick.
-        try {
-          exam.set('analysis_progress', JSON.stringify(progress))
-          $app.save(exam)
-        } catch (err) {
-          console.log('examAnalysisRunner: falha ao salvar progresso: ' + err.message)
-        }
+        // Erro transitório do gateway: persiste o progresso (se falhar, só
+        // loga — a análise continua no próximo tick).
+        saveProgressSafely(exam, progress)
         consolidated = true
         break
       }
@@ -592,16 +588,9 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       progress.pages_done = batchStart + batchPages.length
 
       if (!isLastBatch) {
-        try {
-          // Mesmo bug do kickoff: gravar objeto JS num campo text faz o
-          // PocketBase cast para "". Serializar SEMPRE como JSON string.
-          exam.set('analysis_progress', JSON.stringify(progress))
-          $app.save(exam)
-        } catch (err) {
-          failExam(exam, 'Falha ao salvar o progresso da análise: ' + err.message)
-          consolidated = true
-          break
-        }
+        // Falha ao salvar progresso nunca mata a análise: só loga e segue —
+        // o pages_done em memória continua avançando e o lote seguinte repõe.
+        saveProgressSafely(exam, progress)
         console.log(
           'examAnalysisRunner: lote ' +
             (batchIndex + 1) +
