@@ -3,6 +3,14 @@ import pb from '@/lib/pocketbase/client'
 import { GatewayRejection, prepareExamPagesForAi } from '@/services/examReader'
 import type { ExamPage } from '@/services/examReader'
 
+/** Erro de negócio: o registro do exame não tem arquivo anexado no servidor. */
+export class ExamFileMissingError extends Error {
+  constructor() {
+    super('Este exame não tem arquivo anexado. Exclua e envie o arquivo novamente.')
+    this.name = 'ExamFileMissingError'
+  }
+}
+
 /**
  * Fluxo assíncrono (v0.0.64): o cliente renderiza o documento e envia as
  * páginas em PEDAÇOS pequenos para /backend/v1/ai/analyze-exam-async — cada
@@ -56,7 +64,16 @@ interface AsyncKickoffResponse {
 }
 
 /** Envia um pedaço de páginas. Falha de rede/recusa do ingress sobe GatewayRejection. */
-async function sendChunk(body: Record<string, unknown>): Promise<AsyncKickoffResponse> {
+async function sendChunk(
+  body: Record<string, unknown>,
+  meta?: { chunkIndex?: number; chunkTotal?: number; width?: number; quality?: number },
+): Promise<AsyncKickoffResponse> {
+  const pages = Array.isArray(body?.images) ? (body.images as string[]).length : 0
+  const bytes = body ? JSON.stringify(body).length : 0
+  console.log(
+    `[examAsync] sendChunk #${meta?.chunkIndex ?? '?'}${meta?.chunkTotal ? `/${meta.chunkTotal}` : ''}:` +
+      ` ${pages} página(s), ${(bytes / 1024).toFixed(0)}KB, resolução ${meta?.width ?? '?'}px q${meta?.quality ?? '?'}`,
+  )
   try {
     return (await pb.send(ASYNC_ENDPOINT, {
       method: 'POST',
@@ -84,16 +101,27 @@ async function enqueueAllPages(
   examId: string,
   title: string | undefined,
   onProgress?: (msg: string) => void,
+  res?: { width: number; quality: number },
 ): Promise<void> {
   const chunks = chunkPages(masterPages)
+  if (chunks.length === 0) {
+    throw new Error('A fila de páginas da análise está vazia. Use "Reanalisar com IA".')
+  }
+  console.log(
+    `[examAsync] enfileirando ${masterPages.length} página(s) em ${chunks.length} pedaço(s)` +
+      ` (exame ${examId}${title ? ` — "${title}"` : ''})`,
+  )
   for (let c = 0; c < chunks.length; c++) {
-    await sendChunk({
-      examId,
-      images: chunks[c].map((p) => `data:image/jpeg;base64,${p.base64}`),
-      total_pages: masterPages.length,
-      restart: c === 0,
-      title,
-    })
+    await sendChunk(
+      {
+        examId,
+        images: chunks[c].map((p) => `data:image/jpeg;base64,${p.base64}`),
+        total_pages: masterPages.length,
+        restart: c === 0,
+        title,
+      },
+      { chunkIndex: c + 1, chunkTotal: chunks.length, width: res?.width, quality: res?.quality },
+    )
     if (chunks.length > 1) {
       const queued = chunks.slice(0, c + 1).reduce((n, ch) => n + ch.length, 0)
       onProgress?.(`Enfileiradas ${queued} de ${masterPages.length} página(s)...`)
@@ -116,6 +144,21 @@ export async function startAsyncExamAnalysis(opts: {
   onProgress?: (msg: string) => void
 }): Promise<{ totalPages: number }> {
   const { examId, fileUrlOrFile, title, onProgress } = opts
+  // Pré-checagem: o registro do exame precisa ter arquivo anexado. Sem isso a
+  // fila de páginas sairia vazia e a análise abortaria com a mensagem genérica
+  // de fila vazia — melhor abortar aqui com o motivo exato.
+  if (typeof fileUrlOrFile === 'string') {
+    let record: any = null
+    try {
+      record = await pb.collection('exams').getOne(examId)
+    } catch (err) {
+      console.warn('[examAsync] pré-checagem: não conseguiu ler o registro do exame', err)
+    }
+    if (record && !record.file) {
+      console.warn('[examAsync] exame', examId, 'está SEM arquivo anexado no servidor')
+      throw new ExamFileMissingError()
+    }
+  }
   let lastError: unknown = null
   for (let step = 0; step < ASYNC_LADDER.length; step++) {
     const { width, quality } = ASYNC_LADDER[step]
@@ -129,7 +172,7 @@ export async function startAsyncExamAnalysis(opts: {
         throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
       }
       onProgress?.(`Documento com ${masterPages.length} página(s) renderizado(s). Enfileirando...`)
-      await enqueueAllPages(masterPages, examId, title, onProgress)
+      await enqueueAllPages(masterPages, examId, title, onProgress, { width, quality })
       return { totalPages: masterPages.length }
     } catch (err) {
       lastError = err

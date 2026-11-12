@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import pb from '@/lib/pocketbase/client'
 import { medicalService } from '@/services/medical'
 import {
   runExamAnalysisWithRetry,
@@ -25,6 +26,7 @@ import {
   Loader2,
   FileWarning,
   AlertTriangle,
+  Upload,
 } from 'lucide-react'
 
 /**
@@ -78,6 +80,12 @@ export default function ExamUploadSection() {
   const [examDate, setExamDate] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  /** Reenvio de arquivo em exame sem mídia (substitui o campo file do registro). */
+  const [reuploadingId, setReuploadingId] = useState<string | null>(null)
+  const reuploadExamIdRef = useRef<string | null>(null)
+  const reuploadInputRef = useRef<HTMLInputElement | null>(null)
+  /** Download em curso (desabilita o botão até o blob chegar). */
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   /** Pollers ativos — sobrevivem a re-render e são parados no unmount. */
   const pollersRef = useRef<Map<string, { stop: () => void }>>(new Map())
 
@@ -191,7 +199,7 @@ export default function ExamUploadSection() {
 
   const handleAnalyze = async (exam: Exam) => {
     if (!exam.file) {
-      toast.error('Este exame não possui arquivo anexado para leitura.')
+      toast.error('Este exame não tem arquivo anexado. Exclua e envie o arquivo novamente.')
       return
     }
     if (isAnalyzing(exam)) return
@@ -290,17 +298,77 @@ export default function ExamUploadSection() {
     }
   }
 
-  const handleDownload = (exam: Exam) => {
-    if (!exam.file) return
-    const a = document.createElement('a')
-    a.href = exam.file
-    a.download = downloadFileName(exam)
-    a.target = '_blank'
-    a.rel = 'noreferrer'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    toast.info('Download iniciado.')
+  const handleDownload = async (exam: Exam) => {
+    // Pré-checagem: sem campo de arquivo no registro, não há o que baixar —
+    // orienta o reenvio em vez de falhar com erro genérico de rede.
+    if (!exam.file) {
+      toast.warning('Arquivo não disponível — reenvie o exame.')
+      return
+    }
+    setDownloadingId(exam.id)
+    try {
+      const fetchBlob = async (): Promise<Blob> => {
+        const res = await fetch(exam.file!, { credentials: 'include' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.blob()
+      }
+      let blob: Blob
+      try {
+        blob = await fetchBlob()
+      } catch (firstErr) {
+        // 1 retry em falha de rede/status transitório.
+        console.warn('[ExamUploadSection] download falhou, tentando novamente...', firstErr)
+        blob = await fetchBlob()
+      }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = downloadFileName(exam)
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('Download concluído.')
+    } catch (err) {
+      console.error('[ExamUploadSection] download do exame falhou:', err)
+      toast.error(
+        'Não foi possível baixar o arquivo do exame do servidor. Verifique a conexão e tente novamente.',
+      )
+    } finally {
+      setDownloadingId(null)
+    }
+  }
+
+  /** Abre o seletor para SUBSTITUIR o arquivo de um exame existente (mesmo card). */
+  const openReupload = (exam: Exam) => {
+    reuploadExamIdRef.current = exam.id
+    if (reuploadInputRef.current) reuploadInputRef.current.value = ''
+    reuploadInputRef.current?.click()
+  }
+
+  const handleReuploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    const examId = reuploadExamIdRef.current
+    reuploadExamIdRef.current = null
+    if (!file || !examId) return
+    setReuploadingId(examId)
+    try {
+      // Update do campo file no registro exams EXISTENTE — mantém o mesmo card,
+      // limpa o status de erro e libera o "Reanalisar com IA".
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('analysis_status', '')
+      formData.append('analysis_error', '')
+      await pb.collection('exams').update(examId, formData)
+      setExamError((prev) => ({ ...prev, [examId]: '' }))
+      toast.success('Arquivo anexado ao exame. Use "Reanalisar com IA" para ler o laudo.')
+      await loadExams(true)
+    } catch (err) {
+      console.error('[ExamUploadSection] reenvio de arquivo falhou:', err)
+      toast.error('Não foi possível anexar o novo arquivo. Tente novamente.')
+    } finally {
+      setReuploadingId(null)
+    }
   }
 
   return (
@@ -482,6 +550,7 @@ export default function ExamUploadSection() {
                         size="sm"
                         disabled={analyzingNow || !exam.file}
                         onClick={() => handleAnalyze(exam)}
+                        title={!exam.file ? 'Arquivo não disponível — reenvie o exame' : undefined}
                         className="h-7 px-2 text-[11px] gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
                       >
                         {analyzingNow ? (
@@ -496,15 +565,45 @@ export default function ExamUploadSection() {
                           </>
                         )}
                       </Button>
-                      {exam.file && (
+                      {exam.file ? (
                         <Button
                           variant="ghost"
                           size="sm"
+                          disabled={downloadingId === exam.id}
                           onClick={() => handleDownload(exam)}
                           className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-emerald-700"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          Baixar arquivo
+                          {downloadingId === exam.id ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Baixando…
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5" />
+                              Baixar arquivo
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={reuploadingId === exam.id}
+                          onClick={() => openReupload(exam)}
+                          className="h-7 px-2 text-[11px] gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+                        >
+                          {reuploadingId === exam.id ? (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Anexando…
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3 w-3" />
+                              Reenviar arquivo
+                            </>
+                          )}
                         </Button>
                       )}
                     </div>
@@ -515,6 +614,14 @@ export default function ExamUploadSection() {
           )}
         </div>
       </CardContent>
+      {/* Input oculto do reenvio de arquivo (substitui o campo file do exame existente). */}
+      <input
+        ref={reuploadInputRef}
+        type="file"
+        accept="application/pdf,image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={handleReuploadChange}
+      />
     </Card>
   )
 }
