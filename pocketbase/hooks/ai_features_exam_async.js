@@ -89,7 +89,9 @@ routerAdd(
       if (!wasRunning || !currentStarted || restart) {
         examRecord.set('analysis_started_at', new Date().toISOString())
       }
-      examRecord.set('analysis_pages', pages)
+      // O campo analysis_pages é TEXT: gravar o array JS cru faz o PocketBase
+      // cast para "" — o runner lia fila vazia e abortava. Serializar SEMPRE.
+      examRecord.set('analysis_pages', JSON.stringify(pages))
 
       // Novo envio (kickoff/restart) zera o progresso; pedaço de continuação
       // preserva o que já foi enfileirado.
@@ -116,7 +118,10 @@ routerAdd(
         }
       }
       if (totalPages > 0) progress.total_pages = totalPages
-      examRecord.set('analysis_progress', progress)
+      // O campo analysis_progress é TEXT: gravar o objeto JS cru faz o
+      // PocketBase cast para "" — o runner nunca lia o progresso e o exame
+      // ficava em "Analisando…" para sempre. Serializar SEMPRE como JSON.
+      examRecord.set('analysis_progress', JSON.stringify(progress))
       $app.save(examRecord)
     } catch (err) {
       return e.json(500, { error: 'Falha ao enfileirar a análise: ' + err.message })
@@ -189,8 +194,8 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
     try {
       exam.set('analysis_status', 'error')
       exam.set('analysis_error', message)
-      exam.set('analysis_pages', null)
-      exam.set('analysis_progress', null)
+      exam.set('analysis_pages', '')
+      exam.set('analysis_progress', '')
       $app.save(exam)
       console.log('examAnalysisRunner: exame ' + exam.id + ' marcado como erro: ' + message)
     } catch (err) {
@@ -200,10 +205,22 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
     }
   }
 
+  const startedToMs = (raw) => {
+    if (!raw) return NaN
+    let s = String(raw).trim().replace(' ', 'T')
+    // getString de um campo date já vem com 'Z' — acrescentar outro 'Z'
+    // gerava "…ZZ", Date inválido e a expiração STALE_MS nunca disparava.
+    if (!/Z$/.test(s) && !/[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z'
+    const t = Date.parse(s)
+    return isNaN(t) ? NaN : t
+  }
+
   const parseJsonField = (raw, fallback) => {
-    if (!raw) return fallback
+    if (raw === null || raw === undefined || raw === '') return fallback
+    // O SDK pode devolver o campo JSON já decodificado (array/objeto JS).
+    if (Array.isArray(raw) || typeof raw === 'object') return raw
     try {
-      const v = JSON.parse(raw)
+      const v = JSON.parse(String(raw))
       return v === null || v === undefined ? fallback : v
     } catch (_) {
       return fallback
@@ -233,7 +250,7 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
     try {
       const startedRaw = exam.getString('analysis_started_at') || ''
       if (startedRaw) {
-        const startedMs = new Date(startedRaw.replace(' ', 'T') + 'Z').getTime()
+        const startedMs = startedToMs(startedRaw)
         if (!isNaN(startedMs) && nowMs - startedMs > STALE_MS) {
           failExam(
             exam,
@@ -245,21 +262,30 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
     } catch (_) {}
 
     const pages = parseJsonField(exam.getString('analysis_pages') || '', [])
-    const progress = parseJsonField(exam.getString('analysis_progress') || '', null)
+    let progress = parseJsonField(exam.getString('analysis_progress') || '', null)
     if (!progress || typeof progress !== 'object') {
-      if (pages.length === 0) {
+      if (pages.length > 0) {
+        // Páginas chegaram mas o progresso se perdeu (kickoff antigo que gravava
+        // objeto cru num campo text): reconstrói e processa em vez de ignorar.
+        progress = {
+          total_pages: pages.length,
+          pages_done: 0,
+          attempts: 0,
+          summaries: [],
+          biomarkers: [],
+          ai_meta: null,
+        }
+      } else {
         // Sem páginas e sem progresso: o kickoff nunca completou.
         try {
           const startedRaw2 = exam.getString('analysis_started_at') || ''
-          const startedMs2 = startedRaw2
-            ? new Date(startedRaw2.replace(' ', 'T') + 'Z').getTime()
-            : 0
+          const startedMs2 = startedRaw2 ? startedToMs(startedRaw2) : 0
           if (!startedMs2 || isNaN(startedMs2) || nowMs - startedMs2 > EMPTY_STALE_MS) {
             failExam(exam, 'A fila de páginas da análise está vazia. Use "Reanalisar com IA".')
           }
         } catch (_) {}
+        continue
       }
-      continue
     }
 
     const totalPages = typeof progress.total_pages === 'number' ? progress.total_pages : 0
@@ -271,9 +297,7 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       if (totalPages === 0) {
         try {
           const startedRaw3 = exam.getString('analysis_started_at') || ''
-          const startedMs3 = startedRaw3
-            ? new Date(startedRaw3.replace(' ', 'T') + 'Z').getTime()
-            : 0
+          const startedMs3 = startedRaw3 ? startedToMs(startedRaw3) : 0
           if (!startedMs3 || isNaN(startedMs3) || nowMs - startedMs3 > EMPTY_STALE_MS) {
             failExam(exam, 'Nenhuma página recebida para análise. Use "Reanalisar com IA".')
           }
@@ -472,7 +496,7 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
         }
         // Erro transitório do gateway: persiste o progresso e tenta no próximo tick.
         try {
-          exam.set('analysis_progress', progress)
+          exam.set('analysis_progress', JSON.stringify(progress))
           $app.save(exam)
         } catch (err) {
           console.log('examAnalysisRunner: falha ao salvar progresso: ' + err.message)
@@ -518,7 +542,9 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
 
       if (!isLastBatch) {
         try {
-          exam.set('analysis_progress', progress)
+          // Mesmo bug do kickoff: gravar objeto JS num campo text faz o
+          // PocketBase cast para "". Serializar SEMPRE como JSON string.
+          exam.set('analysis_progress', JSON.stringify(progress))
           $app.save(exam)
         } catch (err) {
           failExam(exam, 'Falha ao salvar o progresso da análise: ' + err.message)
@@ -628,8 +654,8 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
         if (aiExamTitle && exam.getString('title') !== aiExamTitle) exam.set('title', aiExamTitle)
         exam.set('analysis_status', 'done')
         exam.set('analysis_error', '')
-        exam.set('analysis_pages', null)
-        exam.set('analysis_progress', null)
+        exam.set('analysis_pages', '')
+        exam.set('analysis_progress', '')
         exam.set(
           'analysis_stats',
           JSON.stringify({

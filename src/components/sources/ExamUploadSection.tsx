@@ -7,8 +7,9 @@ import {
   fetchExamAnalysisResult,
 } from '@/services/examReader'
 import { startAsyncExamAnalysis } from '@/services/examAsync'
-import { pollExamAnalysis, progressPercent } from '@/services/examStatus'
+import { progressPercent } from '@/services/examStatus'
 import type { ExamStatusSnapshot } from '@/services/examStatus'
+import { startExamAnalysisWatchdog, markExamAnalysisError } from '@/services/examWatchdog'
 import { Exam } from '@/types'
 import { todayStr } from '@/lib/localDate'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,9 +52,9 @@ const EXAM_TYPE_OPTIONS = [
   'Outro',
 ]
 
-/** Intervalo de polling e teto de acompanhamento (o servidor tem o seu próprio). */
+/** Intervalo de polling e tempo de tolerância sem progresso (watchdog). */
 const POLL_INTERVAL_MS = 3000
-const POLL_TIMEOUT_MS = 5 * 60 * 1000
+const STALL_TIMEOUT_MS = 3 * 60 * 1000
 
 function fileIconFor(fileUrl?: string, title?: string) {
   const isPdf =
@@ -119,25 +120,39 @@ export default function ExamUploadSection() {
     return 'Analisando...'
   }
 
-  /** Acompanha um exame que o SERVIDOR já está processando (status 'running'). */
+  /** Acompanha um exame que o SERVIDOR já está processando (status 'running').
+   *  Watchdog: se analysis_status ficar running sem progresso real
+   *  (pages_done sem mudar) por mais de ~3 min, marca erro no exame e libera
+   *  o botão "Reanalisar com IA" — nunca "Analisando…" infinito. */
   const trackExam = useCallback(
     (examId: string) => {
       if (pollersRef.current.has(examId)) return
       setAnalyzing((prev) => ({ ...prev, [examId]: prev[examId] ?? { status: 'running' } }))
-      const { promise, stop } = pollExamAnalysis(examId, {
+      const { promise, stop } = startExamAnalysisWatchdog(examId, {
         intervalMs: POLL_INTERVAL_MS,
-        timeoutMs: POLL_TIMEOUT_MS,
+        stallMs: STALL_TIMEOUT_MS,
         onTick: (snap) => setAnalyzing((prev) => ({ ...prev, [examId]: snap })),
       })
       pollersRef.current.set(examId, { stop })
       promise
-        .then(async (snap) => {
+        .then(async (outcome) => {
           pollersRef.current.delete(examId)
           setAnalyzing((prev) => {
             const next = { ...prev }
             delete next[examId]
             return next
           })
+          if (outcome.kind === 'cancelled') return
+          if (outcome.kind === 'stalled') {
+            const msg =
+              'A análise demorou mais que o esperado. Clique em "Reanalisar com IA" para tentar novamente.'
+            await markExamAnalysisError(examId, msg)
+            setExamError((prev) => ({ ...prev, [examId]: msg }))
+            toast.error(msg)
+            await loadExams(true)
+            return
+          }
+          const snap = outcome.snapshot
           if (snap.status === 'error') {
             const msg = snap.error || 'A leitura por IA falhou neste exame.'
             setExamError((prev) => ({ ...prev, [examId]: msg }))
@@ -165,15 +180,7 @@ export default function ExamUploadSection() {
             delete next[examId]
             return next
           })
-          if (err?.message === 'timeout') {
-            setExamError((prev) => ({
-              ...prev,
-              [examId]:
-                'A análise demorou mais de 5 minutos — o servidor pode ainda estar processando. Recarregue a página em instantes para ver o resultado.',
-            }))
-          } else {
-            console.warn('pollExamAnalysis interrompido:', err)
-          }
+          console.warn('watchdog da análise interrompido:', err)
         })
     },
     [loadExams],
@@ -361,7 +368,38 @@ export default function ExamUploadSection() {
       formData.append('analysis_error', '')
       await pb.collection('exams').update(examId, formData)
       setExamError((prev) => ({ ...prev, [examId]: '' }))
-      toast.success('Arquivo anexado ao exame. Use "Reanalisar com IA" para ler o laudo.')
+      toast.success('Arquivo anexado. Iniciando leitura automática com IA...')
+
+      // O reenvio agora inicia a análise de verdade (mesmo caminho do
+      // "Reanalisar com IA"): PATCH do arquivo → markQueued → kickoff 202 →
+      // pedaços. Qualquer falha propaga para o card como status error.
+      trackExam(examId)
+      try {
+        await markExamAnalysisQueued(examId)
+        await startAsyncExamAnalysis({
+          examId,
+          fileUrlOrFile: file,
+          title: exams.find((e) => e.id === examId)?.title,
+          onProgress: (msg) => toast.info(msg),
+        })
+      } catch (aiErr: any) {
+        // Falha do kickoff/reenvio de páginas: para o indicador e deixa o
+        // status em error — nunca "Analisando…" infinito.
+        pollersRef.current.get(examId)?.stop()
+        pollersRef.current.delete(examId)
+        setAnalyzing((prev) => {
+          const next = { ...prev }
+          delete next[examId]
+          return next
+        })
+        const msg =
+          aiErr?.response?.error ||
+          aiErr?.message ||
+          'Não foi possível iniciar a leitura automática. Use "Reanalisar com IA" para tentar novamente.'
+        setExamError((prev) => ({ ...prev, [examId]: String(msg) }))
+        toast.error(typeof msg === 'string' ? msg : 'Erro ao iniciar a análise com IA')
+        console.warn('[ExamUploadSection] análise pós-reenvio falhou:', aiErr)
+      }
       await loadExams(true)
     } catch (err) {
       console.error('[ExamUploadSection] reenvio de arquivo falhou:', err)
@@ -369,6 +407,15 @@ export default function ExamUploadSection() {
     } finally {
       setReuploadingId(null)
     }
+  }
+
+  /** Limpa a marca de erro do card, sem mexer no arquivo. */
+  const dismissExamError = (examId: string) => {
+    setExamError((prev) => {
+      const next = { ...prev }
+      delete next[examId]
+      return next
+    })
   }
 
   return (
@@ -531,7 +578,15 @@ export default function ExamUploadSection() {
                       ) : errorMsg ? (
                         <div className="bg-red-50/70 dark:bg-red-950/30 p-2 rounded-lg text-[11px] text-red-700 dark:text-red-300 flex items-start gap-1.5">
                           <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span>{errorMsg}</span>
+                          <span className="flex-1">{errorMsg}</span>
+                          <button
+                            type="button"
+                            onClick={() => dismissExamError(exam.id)}
+                            className="shrink-0 text-red-500 hover:text-red-700 dark:text-red-300 dark:hover:text-red-100"
+                            title="Dispensar mensagem"
+                          >
+                            ✕
+                          </button>
                         </div>
                       ) : analyzed ? (
                         <div className="bg-muted/40 p-2 rounded-lg text-[11px] text-foreground/85 whitespace-pre-line max-h-32 overflow-y-auto">
@@ -565,27 +620,29 @@ export default function ExamUploadSection() {
                           </>
                         )}
                       </Button>
-                      {exam.file ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={downloadingId === exam.id}
-                          onClick={() => handleDownload(exam)}
-                          className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-emerald-700"
-                        >
-                          {downloadingId === exam.id ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Baixando…
-                            </>
-                          ) : (
-                            <>
-                              <Download className="h-3.5 w-3.5" />
-                              Baixar arquivo
-                            </>
-                          )}
-                        </Button>
-                      ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={downloadingId === exam.id}
+                        onClick={() => handleDownload(exam)}
+                        className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-emerald-700"
+                      >
+                        {downloadingId === exam.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Baixando…
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3.5 w-3.5" />
+                            Baixar arquivo
+                          </>
+                        )}
+                      </Button>
+                      {/* Reenvio aparece para exames SEM arquivo e também para
+                          exames presos em erro — substituir o arquivo e
+                          reprocessar. Oculto apenas enquanto está analisando. */}
+                      {!analyzingNow && (errorMsg || !exam.file) ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -605,7 +662,7 @@ export default function ExamUploadSection() {
                             </>
                           )}
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )

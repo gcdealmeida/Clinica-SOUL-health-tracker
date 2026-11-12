@@ -474,11 +474,9 @@ export async function analyzeExamWithAi(opts: {
  * campo `status` do exame.
  */
 export async function markExamAnalysisQueued(examId: string): Promise<void> {
-  try {
-    await pb.collection('exams').update(examId, { analysis_status: 'running' })
-  } catch (err) {
-    console.warn('markExamAnalysisQueued: falhou (seguindo sem status local)', err)
-  }
+  // Se nem o PATCH local passou, o kickoff não vai passar: a falha propaga para
+  // o card mostrar erro — nunca "Analisando…" eterno.
+  await pb.collection('exams').update(examId, { analysis_status: 'running' })
 }
 
 /**
