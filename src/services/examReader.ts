@@ -150,7 +150,15 @@ async function loadPdfData(fileUrlOrFile: string | File): Promise<Uint8Array> {
   if (typeof fileUrlOrFile !== 'string') {
     return new Uint8Array(await fileUrlOrFile.arrayBuffer())
   }
-  const res = await fetch(fileUrlOrFile, { credentials: 'include' })
+  let res: Response
+  try {
+    res = await fetch(fileUrlOrFile, { credentials: 'include' })
+  } catch (err) {
+    // "Failed to fetch" cru do navegador (rede/CDN/extensão) vira erro legível.
+    throw new Error(
+      'Não foi possível baixar o arquivo do exame do servidor. Verifique a conexão e tente novamente.',
+    )
+  }
   if (!res.ok) throw new Error(`Falha ao baixar o PDF do exame (${res.status}).`)
   return new Uint8Array(await res.arrayBuffer())
 }
@@ -499,17 +507,50 @@ export async function fetchExamAnalysisResult(examId: string): Promise<ExamAnaly
 }
 
 // pdf.js é carregado sob demanda de CDN (não é dependência npm do projeto).
+// v0.0.65: era um único import de cdn.jsdelivr.net — se o CDN estiver
+// bloqueado/offline (ou extensão de navegador bloquear), o import dinâmico
+// lança TypeError "Failed to fetch" ANTES de qualquer chamada ao backend,
+// exatamente o sintoma visto em /sources. Agora há fallback de CDN e a falha
+// vira erro legível (nunca "Failed to fetch" cru).
 const PDFJS_VERSION = '4.10.38'
-const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`
-const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`
+const PDFJS_SOURCES = [
+  `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`,
+  `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`,
+  `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.mjs`,
+]
+
+/** workerSrc precisa do MESMO CDN de onde o pdf.min.mjs veio. */
+function workerUrlFor(moduleUrl: string): string {
+  return moduleUrl.replace(/pdf\.min\.mjs$/, 'pdf.worker.min.mjs')
+}
+
+function pdfJsErrorMessage(err: unknown): string {
+  const detail = err instanceof Error ? err.message : String(err)
+  return (
+    'Não foi possível carregar o leitor de PDF no navegador (verifique sua conexão ' +
+    'ou bloqueadores de extensão). Detalhe técnico: ' +
+    detail
+  )
+}
 
 let pdfJsPromise: Promise<any> | null = null
 export async function getPdfJs(): Promise<any> {
   if (!pdfJsPromise) {
-    pdfJsPromise = import(/* @vite-ignore */ PDFJS_URL).then((mod: any) => {
-      mod.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL
-      return mod
-    })
+    pdfJsPromise = (async () => {
+      let lastErr: unknown = null
+      for (const url of PDFJS_SOURCES) {
+        try {
+          const mod: any = await import(/* @vite-ignore */ url)
+          mod.GlobalWorkerOptions.workerSrc = workerUrlFor(url)
+          return mod
+        } catch (err) {
+          lastErr = err
+          console.warn('getPdfJs: falha ao carregar pdf.js de ' + url, err)
+        }
+      }
+      pdfJsPromise = null // permite nova tentativa no próximo clique
+      throw new Error(pdfJsErrorMessage(lastErr))
+    })()
   }
   return pdfJsPromise
 }

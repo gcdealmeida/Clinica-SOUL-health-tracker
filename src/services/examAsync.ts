@@ -4,20 +4,28 @@ import { GatewayRejection, prepareExamPagesForAi } from '@/services/examReader'
 import type { ExamPage } from '@/services/examReader'
 
 /**
- * Fluxo assíncrono (v0.0.64): o cliente renderiza o documento inteiro e envia
- * as páginas em PEDAÇOS pequenos para /backend/v1/ai/analyze-exam-async — cada
+ * Fluxo assíncrono (v0.0.64): o cliente renderiza o documento e envia as
+ * páginas em PEDAÇOS pequenos para /backend/v1/ai/analyze-exam-async — cada
  * pedaço responde 202 na hora (o kickoff enfileira, os pedaços seguintes
  * anexam). O runner em cron (ai_features_exam_async.js) processa em segundo
  * plano e o app acompanha via polling em exams.analysis_status (examStatus.ts).
- *
- * Isso elimina o "Failed to fetch": nenhuma requisição demora ou carrega
- * payload grande demais para o ingress.
  */
 
 const ASYNC_ENDPOINT = '/backend/v1/ai/analyze-exam-async'
 
 /** Teto aproximado de caracteres base64 (JSON) por pedaço (~700KB de corpo). */
 const MAX_CHUNK_CHARS = 700_000
+
+/**
+ * Escada de resolução do envio assíncrono: se um pedaço for recusado
+ * (413/503/falha de rede no ingress), re-renderiza TODO o documento na
+ * resolução seguinte e reenvia do zero.
+ */
+const ASYNC_LADDER: Array<{ width: number; quality: number }> = [
+  { width: 1024, quality: 0.75 },
+  { width: 768, quality: 0.7 },
+  { width: 512, quality: 0.6 },
+]
 
 function chunkPages(pages: ExamPage[]): ExamPage[][] {
   const chunks: ExamPage[][] = []
@@ -47,7 +55,7 @@ interface AsyncKickoffResponse {
   error?: string
 }
 
-/** Envia um pedaço de páginas. `restart` limpa a fila antes de anexar. */
+/** Envia um pedaço de páginas. Falha de rede/recusa do ingress sobe GatewayRejection. */
 async function sendChunk(body: Record<string, unknown>): Promise<AsyncKickoffResponse> {
   try {
     return (await pb.send(ASYNC_ENDPOINT, {
@@ -57,7 +65,7 @@ async function sendChunk(body: Record<string, unknown>): Promise<AsyncKickoffRes
   } catch (err: any) {
     const status = err?.status || err?.response?.status
     // Sem status (TypeError "Failed to fetch" / status 0) ou recusas do
-    // gateway/ingress: sobe GatewayRejection — a chamada em course re-renderiza
+    // gateway/ingress: sobe GatewayRejection — a chamada em curso re-renderiza
     // em resolução menor e reenvia do zero (mesma escada do fluxo síncrono).
     if (!status || err instanceof TypeError || [400, 413, 503, 502, 504].includes(status)) {
       throw new GatewayRejection(status || 0, {
@@ -70,25 +78,13 @@ async function sendChunk(body: Record<string, unknown>): Promise<AsyncKickoffRes
   }
 }
 
-/**
- * Renderiza o documento (PDF/imagem) e enfileira TODAS as páginas na análise
- * assíncrona. Responde quando o kickoff aceita o trabalho (202) — o
- * processamento continua sozinho no servidor.
- */
-export async function startAsyncExamAnalysis(opts: {
-  examId: string
-  fileUrlOrFile: string | File
-  title?: string
-  onProgress?: (msg: string) => void
-}): Promise<{ totalPages: number }> {
-  const { examId, fileUrlOrFile, title, onProgress } = opts
-  onProgress?.('Preparando e renderizando o documento completo...')
-  const masterPages = await prepareExamPagesForAi(fileUrlOrFile, undefined, 1024, 0.75)
-  if (masterPages.length === 0) {
-    throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
-  }
-  onProgress?.(`Documento com ${masterPages.length} página(s) renderizado(s). Enfileirando...`)
-
+/** Envia todas as páginas de um documento já renderizado, em pedaços. */
+async function enqueueAllPages(
+  masterPages: ExamPage[],
+  examId: string,
+  title: string | undefined,
+  onProgress?: (msg: string) => void,
+): Promise<void> {
   const chunks = chunkPages(masterPages)
   for (let c = 0; c < chunks.length; c++) {
     await sendChunk({
@@ -104,5 +100,46 @@ export async function startAsyncExamAnalysis(opts: {
     }
   }
   onProgress?.('Páginas na fila — o processamento continua em segundo plano.')
-  return { totalPages: masterPages.length }
+}
+
+/**
+ * Renderiza o documento (PDF/imagem) e enfileira TODAS as páginas na análise
+ * assíncrona. Responde quando o kickoff aceita o trabalho (202) — o
+ * processamento continua sozinho no servidor. Se um pedaço for recusado pelo
+ * ingress/gateway (GatewayRejection), re-renderiza o documento inteiro na
+ * resolução seguinte da escada e reenvia do zero.
+ */
+export async function startAsyncExamAnalysis(opts: {
+  examId: string
+  fileUrlOrFile: string | File
+  title?: string
+  onProgress?: (msg: string) => void
+}): Promise<{ totalPages: number }> {
+  const { examId, fileUrlOrFile, title, onProgress } = opts
+  let lastError: unknown = null
+  for (let step = 0; step < ASYNC_LADDER.length; step++) {
+    const { width, quality } = ASYNC_LADDER[step]
+    try {
+      if (step > 0) {
+        onProgress?.(`O envio falhou — tentando novamente com resolução menor (${width}px)...`)
+      }
+      onProgress?.('Preparando e renderizando o documento completo...')
+      const masterPages = await prepareExamPagesForAi(fileUrlOrFile, undefined, width, quality)
+      if (masterPages.length === 0) {
+        throw new Error('Não foi possível extrair páginas do arquivo para leitura.')
+      }
+      onProgress?.(`Documento com ${masterPages.length} página(s) renderizado(s). Enfileirando...`)
+      await enqueueAllPages(masterPages, examId, title, onProgress)
+      return { totalPages: masterPages.length }
+    } catch (err) {
+      lastError = err
+      // Só sobe na escada quando for recusa de rede/gateway; erros de negócio
+      // (arquivo ilegível, 401/403/404) terminam aqui mesmo.
+      if (err instanceof GatewayRejection && step < ASYNC_LADDER.length - 1) continue
+      throw err
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Não foi possível enviar o exame para análise.')
 }

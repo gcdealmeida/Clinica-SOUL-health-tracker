@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T07:43:15.472Z",
+  "generatedAt": "2026-11-12T08:03:30.750Z",
   "collections": [
     {
       "name": "users",
@@ -1491,6 +1491,89 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_exams_user_date ON exams (user, date DESC)"]
+    },
+    {
+      "name": "profile_biomarkers",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && user = @request.auth.id",
+        "delete": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "value",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "unit",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reference_range",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "category",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_biomarkers_user ON profile_biomarkers (user, date DESC)"]
     }
   ]
 }
