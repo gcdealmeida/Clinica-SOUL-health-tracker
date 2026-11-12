@@ -7,11 +7,19 @@
 // MAX_PAGES=5 páginas em background, persistindo o progresso em
 // exams.analysis_progress — quedas/deploy não perdem o trabalho.
 //
-// Campos (migrations 0035–0038): analysis_status (running/done/error),
+// Campos (migrations 0035–0038, 0045): analysis_status (running/done/error),
 // analysis_error, analysis_started_at, analysis_stats (JSON final com
 // contadores para o aviso do app), analysis_pages (JSON com as páginas JPEG),
 // analysis_progress (JSON {total_pages, pages_done, attempts, summaries,
 // biomarkers, ai_meta}).
+//
+// analysis_pages e analysis_progress são campos JSON (maxSize 4MB) desde a
+// migration 0045 — antes o analysis_progress era text com limite de 5000
+// chars e laudos de 16 páginas estouravam o limite ("Must be no more than
+// 5000 character(s)"), travando a fila. Mesmo assim, TODO save do progresso
+// passa por saveProgressSafely (degradação graciosa): o pages_done NUNCA
+// deixa de avançar por causa do campo de progresso — senão o watchdog do
+// cliente (3min) marca "excedeu o tempo máximo" e a fila morre.
 //
 // Regra JSVM: TODOS os helpers são declarados INLINE dentro dos callbacks
 // (routerAdd/cronAdd) — declarações top-level não são visíveis entre pools.
@@ -118,11 +126,27 @@ routerAdd(
         }
       }
       if (totalPages > 0) progress.total_pages = totalPages
-      // O campo analysis_progress é TEXT: gravar o objeto JS cru faz o
-      // PocketBase cast para "" — o runner nunca lia o progresso e o exame
-      // ficava em "Analisando…" para sempre. Serializar SEMPRE como JSON.
-      examRecord.set('analysis_progress', JSON.stringify(progress))
-      $app.save(examRecord)
+      // O campo analysis_progress é JSON (maxSize 4MB, migration 0045):
+      // serializar SEMPRE como string JSON — gravar objeto cru faz o
+      // PocketBase cast para "". Se o save do progresso falhar, o erro
+      // vai legível para o cliente (que re-renderiza na escada) em vez de
+      // deixar o exame preso em 'running' eterno.
+      try {
+        examRecord.set('analysis_progress', JSON.stringify(progress))
+        $app.save(examRecord)
+      } catch (errProgress) {
+        console.log(
+          'analyze-exam-async: falha ao salvar progresso do exame ' +
+            examId +
+            ': ' +
+            errProgress.message,
+        )
+        return e.json(500, {
+          error:
+            'Falha ao salvar o progresso da análise (campo analysis_progress): ' +
+            errProgress.message,
+        })
+      }
     } catch (err) {
       return e.json(500, { error: 'Falha ao enfileirar a análise: ' + err.message })
     }
@@ -202,6 +226,33 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       console.log(
         'examAnalysisRunner: falha ao marcar erro do exame ' + exam.id + ': ' + err.message,
       )
+    }
+  }
+
+  // Salva o progresso SEM deixar a análise morrer por causa do campo: se o
+  // save falhar (campo indisponível, limite excedido etc.), registra o valor
+  // em memória da VM (sobra para o próximo tick do MESMO pool) e segue — o
+  // pages_done em memória continua avançando e o lote seguinte repõe o valor.
+  const saveProgressSafely = (exam, progress) => {
+    let json = ''
+    try {
+      json = JSON.stringify(progress)
+    } catch (_) {
+      json = JSON.stringify({
+        total_pages: progress.total_pages || 0,
+        pages_done: progress.pages_done || 0,
+        attempts: progress.attempts || 0,
+      })
+    }
+    try {
+      exam.set('analysis_progress', json)
+      $app.save(exam)
+      return { ok: true }
+    } catch (err) {
+      console.log(
+        'examAnalysisRunner: save do progresso falhou (seguindo sem persistir): ' + err.message,
+      )
+      return { ok: false, error: err.message }
     }
   }
 
