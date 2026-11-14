@@ -240,9 +240,31 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       $app.save(exam)
       console.log('examAnalysisRunner: exame ' + exam.id + ' marcado como erro: ' + message)
     } catch (err) {
-      console.log(
-        'examAnalysisRunner: falha ao marcar erro do exame ' + exam.id + ': ' + err.message,
-      )
+      // O record em memória pode carregar um campo inválido (ex.: o resumo com
+      // mais de 5000 chars que motivou o fail) que bloqueia QUALQUER save —
+      // sem o reload o exame ficava preso em 'running' eterno, reprocessando
+      // o mesmo lote a cada tick. Recarrega limpo do banco e tenta de novo.
+      try {
+        const fresh = $app.findRecordById('exams', exam.id)
+        fresh.set('analysis_status', 'error')
+        fresh.set('analysis_error', message)
+        fresh.set('analysis_pages', '')
+        fresh.set('analysis_progress', '')
+        $app.save(fresh)
+        console.log(
+          'examAnalysisRunner: exame ' +
+            exam.id +
+            ' marcado como erro (record recarregado): ' +
+            message,
+        )
+      } catch (err2) {
+        console.log(
+          'examAnalysisRunner: falha ao marcar erro do exame ' +
+            exam.id +
+            ': ' +
+            (err2 && err2.message ? err2.message : String(err2 || err)),
+        )
+      }
     }
     // Importação inteligente: propaga o erro para o registro da fila de
     // importação (exam_imports) — o app mostra "erro" no arquivo da fila.
@@ -263,6 +285,10 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
   // em memória da VM (sobra para o próximo tick do MESMO pool) e segue — o
   // pages_done em memória continua avançando e o lote seguinte repõe o valor.
   const saveProgressSafely = (exam, progress) => {
+    // Heartbeat: a hora do último progresso real vai dentro do próprio JSON —
+    // a expiração do runner (STALE_MS) mede desde aqui, não desde o início
+    // total (um laudo de 16 páginas pode correr 4+ min COM vida).
+    progress.last_heartbeat = new Date().toISOString()
     let json = ''
     try {
       json = JSON.stringify(progress)
@@ -281,8 +307,37 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       console.log(
         'examAnalysisRunner: save do progresso falhou (seguindo sem persistir): ' + err.message,
       )
+      // O record em memória pode ter ficado sujo (campo inválido setado antes
+      // do save falhar) — recarrega do banco para os saves seguintes não
+      // falharem em cascata pelo mesmo motivo.
+      try {
+        const fresh = $app.findRecordById('exams', exam.id)
+        exam.set('analysis_pages', fresh.getString('analysis_pages'))
+        exam.set('analysis_progress', fresh.getString('analysis_progress'))
+        exam.set('analysis_stats', fresh.getString('analysis_stats'))
+        exam.set('summary_results', fresh.getString('summary_results'))
+        exam.set('supplementary_info', fresh.getString('supplementary_info'))
+      } catch (_) {}
       return { ok: false, error: err.message }
     }
+  }
+
+  /**
+   * Heartbeat do progresso: grava UMA VEZ POR LOTE (não a cada página) o
+   * pages_done do lote ANTERIOR — o cliente vê o percentual andando enquanto
+   * o lote corrente processa, e o watchdog mede o intervalo desde o último
+   * heartbeat (nunca o total). Falha de save aqui só loga: nunca mata a
+   * análise (mesmo contrato de saveProgressSafely).
+   */
+  const saveHeartbeat = (exam, progress) => {
+    const res = saveProgressSafely(exam, progress)
+    if (!res.ok) {
+      console.log(
+        'examAnalysisRunner: heartbeat de progresso não persistido (análise segue): ' +
+          (res.error || ''),
+      )
+    }
+    return res
   }
 
   const startedToMs = (raw) => {
@@ -327,17 +382,35 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
     const nowMs = Date.now()
 
     // ---- Expiração ----
+    // Mede desde o ÚLTIMO progresso real (heartbeat gravado em
+    // analysis_progress.last_heartbeat a cada lote), não desde o início:
+    // uma análise viva com lotes concluídos nunca é interrompida aqui.
     try {
-      const startedRaw = exam.getString('analysis_started_at') || ''
-      if (startedRaw) {
-        const startedMs = startedToMs(startedRaw)
-        if (!isNaN(startedMs) && nowMs - startedMs > STALE_MS) {
-          failExam(
-            exam,
-            'A análise excedeu o tempo máximo e foi interrompida. Use "Reanalisar com IA" para tentar novamente.',
-          )
-          continue
+      let lastProgressMs = NaN
+      const progressRaw = exam.getString('analysis_progress') || ''
+      if (progressRaw) {
+        let parsedProgress = null
+        try {
+          parsedProgress = JSON.parse(progressRaw)
+        } catch (_) {
+          parsedProgress = null
         }
+        const hb =
+          parsedProgress && typeof parsedProgress === 'object'
+            ? String(parsedProgress.last_heartbeat || '')
+            : ''
+        if (hb) lastProgressMs = startedToMs(hb)
+      }
+      if (isNaN(lastProgressMs)) {
+        const startedRaw = exam.getString('analysis_started_at') || ''
+        if (startedRaw) lastProgressMs = startedToMs(startedRaw)
+      }
+      if (!isNaN(lastProgressMs) && nowMs - lastProgressMs > STALE_MS) {
+        failExam(
+          exam,
+          'A análise excedeu o tempo máximo e foi interrompida. Use "Reanalisar com IA" para tentar novamente.',
+        )
+        continue
       }
     } catch (_) {}
 
@@ -681,7 +754,19 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
         console.log('examAnalysisRunner: coleção profile_biomarkers indisponível: ' + err.message)
       }
 
-      const summaryText = progress.summaries.join('\n\n')
+      // O campo summary_results é text (limite 5000 do PocketBase). Um resumo
+      // consolidado de laudo longo passa disso e o SAVE FINAL inteiro falhava
+      // (o exame ficava preso em 'running' e o watchdog marcava timeout).
+      // Trunca com folga para o aviso — o texto completo vive no laudo original.
+      const RAW_SUMMARY = progress.summaries.join('\n\n')
+      const SUMMARY_LIMIT = 4900
+      const summaryText =
+        RAW_SUMMARY.length > SUMMARY_LIMIT
+          ? RAW_SUMMARY.slice(0, SUMMARY_LIMIT) +
+            '\n\n[Resumo truncado — laudo com ' +
+            pages.length +
+            ' páginas; o texto completo está no arquivo original.]'
+          : RAW_SUMMARY
       const finalMeta = progress.ai_meta || {}
       const examDate =
         finalMeta.exam_date && finalMeta.exam_date.trim()

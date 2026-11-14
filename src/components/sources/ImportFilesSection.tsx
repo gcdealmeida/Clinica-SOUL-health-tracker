@@ -50,7 +50,10 @@ import {
  */
 
 const POLL_INTERVAL_MS = 3000
-const STALL_TIMEOUT_MS = 5 * 60 * 1000
+// Lote de 5 páginas pode levar >5 min no gateway (laudo denso); o runner
+// grava heartbeat de pages_done a cada lote, então mede desde o último
+// progresso — 8 min cobre o lote mais lento sem abortar análise viva.
+const STALL_TIMEOUT_MS = 8 * 60 * 1000
 
 type Stage =
   | 'received'

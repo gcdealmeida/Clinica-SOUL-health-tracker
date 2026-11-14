@@ -54,7 +54,10 @@ const EXAM_TYPE_OPTIONS = [
 
 /** Intervalo de polling e tempo de tolerância sem progresso (watchdog). */
 const POLL_INTERVAL_MS = 3000
-const STALL_TIMEOUT_MS = 3 * 60 * 1000
+// Lote de 5 páginas pode passar de 3 min no gateway de IA (laudos densos):
+// 8 min entre progressos — o heartbeat do runner grava pages_done a cada
+// lote, então o stall aqui mede o intervalo desde o ÚLTIMO progresso.
+const STALL_TIMEOUT_MS = 8 * 60 * 1000
 
 function fileIconFor(fileUrl?: string, title?: string) {
   const isPdf =
