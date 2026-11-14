@@ -226,7 +226,7 @@ export interface EmotionalLog {
   updated: string
 }
 
-export type ExamAnalysisStatus = 'running' | 'done' | 'error' | ''
+export type ExamAnalysisStatus = 'running' | 'done' | 'error' | 'awaiting_review' | 'queued' | ''
 
 /** Progresso assíncrono da leitura por IA (JSON em exams.analysis_progress). */
 export interface ExamAnalysisProgress {

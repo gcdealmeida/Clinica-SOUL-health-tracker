@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils'
 import { WEARABLE_SERVICES } from '@/components/menu/wearableServicesData'
 import ExamUploadSection from '@/components/sources/ExamUploadSection'
+import { ImportFilesSection } from '@/components/sources/ImportFilesSection'
 
 /**
  * Página Sources (padrão Guava): Devices & Apps com passo a passo de
@@ -43,6 +44,9 @@ export default function SourcesPage() {
 
         {/* Upload Files / Downloads Exames */}
         <ExamUploadSection />
+
+        {/* Importação inteligente de arquivos (PDF/JPG/PNG/DOCX/XLSX/CSV/TXT) */}
+        <ImportFilesSection />
 
         {/* Devices & Apps */}
         <Card>

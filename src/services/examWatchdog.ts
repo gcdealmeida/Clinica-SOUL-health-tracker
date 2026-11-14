@@ -61,7 +61,9 @@ export function startExamAnalysisWatchdog(
       }
       if (cancelled) return
       const status = lastSnapshot?.status
-      if (status === 'done' || status === 'error') {
+      // 'awaiting_review' também é terminal no fluxo de IMPORTAÇÃO: a extração
+      // acabou e os dados ficam em staging aguardando decisão do usuário.
+      if (status === 'done' || status === 'error' || status === 'awaiting_review') {
         resolve({ kind: 'finished', snapshot: lastSnapshot! })
         return
       }

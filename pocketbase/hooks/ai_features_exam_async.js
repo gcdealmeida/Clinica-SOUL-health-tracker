@@ -52,6 +52,17 @@ routerAdd(
       return e.json(403, { error: 'Sem permissão para analisar este exame.' })
     }
 
+    // Importação inteligente: o arquivo pode vir como TEXTO extraído no cliente
+    // (DOCX/XLSX/CSV/TXT) em vez de imagens — mesmo formato de pedaços.
+    // (Declarado ANTES do check de fila vazia: referenciar 'texts' antes da
+    // declaração lançava ReferenceError em TODA chamada com origin='import'.)
+    const origin = data && data.origin ? String(data.origin) : ''
+    const isImport = origin === 'import'
+    let texts = []
+    if (isImport && data && Array.isArray(data.texts)) {
+      texts = data.texts.filter((t) => typeof t === 'string' && t.length > 0)
+    }
+
     // Páginas deste pedaço (data URLs JPEG). O cliente envia em pedaços de
     // ~700KB para nunca estourar o limite do ingress (fonte do 413 original).
     let chunk = []
@@ -70,15 +81,6 @@ routerAdd(
     // restart=true (reenvio em resolução menor após recusa do gateway) limpa a
     // fila antes de anexar.
     const restart = data && data.restart === true
-
-    // Importação inteligente: o arquivo pode vir como TEXTO extraído no cliente
-    // (DOCX/XLSX/CSV/TXT) em vez de imagens — mesmo formato de pedaços.
-    const origin = data && data.origin ? String(data.origin) : ''
-    const isImport = origin === 'import'
-    let texts = []
-    if (isImport && data && Array.isArray(data.texts)) {
-      texts = data.texts.filter((t) => typeof t === 'string' && t.length > 0)
-    }
 
     // Anexa o pedaço às páginas já enfileiradas.
     let pages = []
