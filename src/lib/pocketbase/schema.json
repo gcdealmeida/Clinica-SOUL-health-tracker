@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T10:04:06.698Z",
+  "generatedAt": "2026-11-14T15:46:55.232Z",
   "collections": [
     {
       "name": "users",
@@ -1488,9 +1488,36 @@
           "type": "json",
           "required": false,
           "system": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file_size",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "supplementary_info",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
-      "indexes": ["CREATE INDEX idx_exams_user_date ON exams (user, date DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_exams_user_date ON exams (user, date DESC)",
+        "CREATE INDEX `idx_exams_user_hash` ON `exams` (user) WHERE content_hash"
+      ]
     },
     {
       "name": "profile_biomarkers",
@@ -1571,9 +1598,190 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "source_exam",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "exams"
+        },
+        {
+          "name": "source_page",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evidence",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "processing_date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "validation_status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["approved", "pending", "uncertain", "rejected"]
+        },
+        {
+          "name": "uncertainty_reason",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "raw_content",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE INDEX idx_biomarkers_user ON profile_biomarkers (user, date DESC)"]
+    },
+    {
+      "name": "exam_imports",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "view": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "create": "@request.auth.id != '' && user = @request.auth.id",
+        "update": "@request.auth.id != '' && (user = @request.auth.id || @request.auth.role = 'profissional')",
+        "delete": "@request.auth.id != '' && user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "exam",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "exams"
+        },
+        {
+          "name": "filename",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "file_type",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file_size",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "content_hash",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["received", "reading", "extracting", "awaiting_review", "saved", "error"]
+        },
+        {
+          "name": "error_message",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pages_total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pages_done",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "items_extracted",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "items_approved",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "items_rejected",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "duplicates_found",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "coverage",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "extracted_text",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "review_state",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["not_started", "in_progress", "approved"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_exam_imports_user ON exam_imports (user, created DESC)",
+        "CREATE INDEX idx_exam_imports_exam ON exam_imports (exam)"
+      ]
     }
   ]
 }
