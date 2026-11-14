@@ -14,6 +14,9 @@ import {
   importAssist,
   extractAndEnqueueText,
   importKickoff,
+  exportImportCsv,
+  exportImportJson,
+  downloadBlob,
 } from '@/services/importFiles'
 import type { ImportKind } from '@/services/importFiles'
 import { ImportReviewPanel } from '@/components/sources/ImportReviewPanel'
@@ -323,18 +326,13 @@ export function ImportFilesSection() {
     try {
       const exam: any = await pb.collection('exams').getOne(entry.examId)
       if (!exam?.file) throw new Error('O exame não tem arquivo anexado.')
-      const res = await fetch(pb.getFileUrl(exam, exam.file), { credentials: 'include' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const blob = await res.blob()
+      // ?token= na URL do arquivo: PocketBase autentica por header/token, nunca
+      // por cookie (credentials:'include' aqui voltaria 401).
+      const fileUrl = new URL(pb.getFileUrl(exam, exam.file))
+      if (pb.authStore.token) fileUrl.searchParams.set('token', pb.authStore.token)
+      const blob = await (await fetch(fileUrl.toString())).blob()
       const ext = exam.file.split('.').pop() || 'bin'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${(exam.title || 'exame').replace(/[^\w.-]+/g, '_')}.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, `${(exam.title || 'exame').replace(/[^\w.-]+/g, '_')}.${ext}`)
     } catch (err: any) {
       console.error('[ImportFilesSection] download do original falhou:', err)
       toast.error(err?.message || 'Falha ao baixar o arquivo original.')
@@ -350,23 +348,16 @@ export function ImportFilesSection() {
     }
     setExportingId(entry.localId)
     try {
-      const res = await fetch(
-        `${pb.baseUrl}/backend/v1/ai/import-export?file=${encodeURIComponent(entry.importId)}&format=${format}`,
-        { credentials: 'include' },
-      )
-      if (!res.ok) {
-        const detail = await res.text().catch(() => '')
-        throw new Error(detail || `HTTP ${res.status}`)
+      if (format === 'csv') {
+        downloadBlob(await exportImportCsv(entry.importId), `import-${entry.importId}.csv`)
+      } else {
+        downloadBlob(
+          new Blob([JSON.stringify(await exportImportJson(entry.importId), null, 2)], {
+            type: 'application/json',
+          }),
+          `import-${entry.importId}.json`,
+        )
       }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `import-${entry.importId}.${format}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
       toast.success(`Exportado em ${format.toUpperCase()}.`)
     } catch (err: any) {
       console.error('[ImportFilesSection] export falhou:', err)

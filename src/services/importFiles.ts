@@ -80,17 +80,17 @@ export const IMPORT_ACCEPT =
  * tentar resolver o módulo.
  */
 async function getMammoth(): Promise<any> {
-  const mod: any = await import(
-    /* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js'
-  )
+  // URL em VARIÁVEL + @vite-ignore: literal de URL faz o TS tentar resolver o
+  // módulo (TS2307) e o Vite quebrar o build — mesmo padrão de examReader.
+  const url = 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js'
+  const mod: any = await import(/* @vite-ignore */ url)
   return mod.default || mod
 }
 
-/** Carrega SheetJS (XLSX) de CDN. */
+/** Carrega SheetJS (XLSX) de CDN — mesmo padrão de getMammoth(). */
 async function getXlsx(): Promise<any> {
-  const mod: any = await import(
-    /* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js'
-  )
+  const url = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.full.min.js'
+  const mod: any = await import(/* @vite-ignore */ url)
   return mod.default || mod
 }
 
@@ -217,6 +217,7 @@ export async function extractAndEnqueueText(opts: {
   }
   if (current.length > 0) pieces.push(current)
 
+  let queued = 0
   for (let c = 0; c < pieces.length; c++) {
     await backendPost('/backend/v1/ai/analyze-exam-async', {
       examId: opts.examId,
@@ -225,9 +226,8 @@ export async function extractAndEnqueueText(opts: {
       origin: 'import',
       restart: c === 0,
     })
-    opts.onProgress?.(
-      `Enfileirado(s) ${Math.min((c + 1) * MAX_PAGES_SENT, chunks.length)} de ${chunks.length} bloco(s)...`,
-    )
+    queued += pieces[c].length
+    opts.onProgress?.(`Enfileirado(s) ${queued} de ${chunks.length} bloco(s)...`)
   }
   return { chunks: chunks.length }
 }
@@ -281,14 +281,27 @@ export async function exportImportJson(importId: string): Promise<{
   })) as any
 }
 
+/**
+ * Fetch autenticado com header Authorization (o PocketBase NÃO usa cookies —
+ * credentials:'include' volta 401). Blob por fora do pb.send, que só parseia JSON.
+ */
+async function backendGetBlob(url: string): Promise<Blob> {
+  const token = pb.authStore.token
+  const res = await fetch(url, {
+    headers: token ? { Authorization: token } : undefined,
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(detail || `HTTP ${res.status}`)
+  }
+  return res.blob()
+}
+
 /** Exportação estruturada (CSV) — baixa o blob direto do endpoint. */
 export async function exportImportCsv(importId: string): Promise<Blob> {
-  const res = await fetch(
+  return backendGetBlob(
     `${pb.baseUrl}${BACKEND.export}?file=${encodeURIComponent(importId)}&format=csv`,
-    { credentials: 'include' },
   )
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.blob()
 }
 
 /** Dispara o download de um Blob no navegador. */
