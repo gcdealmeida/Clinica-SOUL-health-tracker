@@ -382,3 +382,142 @@ routerAdd(
   },
   $apis.requireAuth(),
 )
+
+// ---------------------------------------------------------------
+// import-export: devolve os dados estruturados de um arquivo
+// importado (biomarcadores gravados + informações complementares)
+// como JSON (?format=json, padrão) ou CSV (?format=csv).
+// ---------------------------------------------------------------
+routerAdd(
+  'GET /backend/v1/ai/import-export',
+  (e) => {
+    const auth = e.auth
+    if (!auth) return e.json(401, { error: 'Autenticação obrigatória.' })
+
+    const q = e.requestInfo().query || {}
+    const importId = String(q.file || q.import_id || '').trim()
+    const format = String(q.format || 'json').toLowerCase()
+    if (!importId) return e.json(400, { error: 'file (id do import) é obrigatório.' })
+    if (format !== 'json' && format !== 'csv') {
+      return e.json(400, { error: 'Formato não suportado: use format=json ou format=csv.' })
+    }
+
+    let imp = null
+    try {
+      imp = $app.findRecordById('exam_imports', importId)
+    } catch (_) {
+      return e.json(404, { error: 'Importação não encontrada.' })
+    }
+    if (imp.getString('user') !== auth.id && auth.getString('role') !== 'profissional') {
+      return e.json(403, { error: 'Sem permissão.' })
+    }
+
+    let examId = ''
+    try {
+      const examRef = imp.get('exam')
+      if (examRef && examRef.id) examId = examRef.id
+    } catch (_) {}
+    const filename = String(imp.get('filename') || 'importacao')
+    const safeBase =
+      filename.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_\-]/g, '_') || 'importacao'
+
+    // Biomarcadores gravados a partir deste arquivo.
+    let bios = []
+    try {
+      bios = $app.findRecordsByFilter(
+        'profile_biomarkers',
+        'user = {:u} && source_exam = {:e} && validation_status != "rejected"',
+        'name,-created',
+        500,
+        0,
+        { u: auth.id, e: examId },
+      )
+    } catch (_) {}
+
+    // Informações complementares (campo JSON/texto do exame).
+    let supplementary = []
+    try {
+      const exam = $app.findRecordById('exams', examId)
+      const raw = exam.getString('supplementary_info') || ''
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) supplementary = parsed
+      }
+    } catch (_) {}
+
+    const rows = []
+    for (let i = 0; i < bios.length; i++) {
+      const r = bios[i]
+      rows.push({
+        name: String(r.getString('name') || ''),
+        value: String(r.getString('value') || ''),
+        unit: String(r.getString('unit') || ''),
+        reference_range: String(r.getString('reference_range') || ''),
+        date: String(r.getString('date') || ''),
+        status: String(r.getString('status') || ''),
+        validation_status: String(r.getString('validation_status') || ''),
+        source_page: String(r.getString('source_page') || ''),
+        evidence: String(r.getString('evidence') || ''),
+        uncertainty_reason: String(r.getString('uncertainty_reason') || ''),
+      })
+    }
+
+    if (format === 'csv') {
+      const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'
+      const header =
+        'name,value,unit,reference_range,date,status,validation_status,source_page,evidence,uncertainty_reason'
+      const lines = [header]
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i]
+        lines.push(
+          esc(r.name) +
+            ',' +
+            esc(r.value) +
+            ',' +
+            esc(r.unit) +
+            ',' +
+            esc(r.reference_range) +
+            ',' +
+            esc(r.date) +
+            ',' +
+            esc(r.status) +
+            ',' +
+            esc(r.validation_status) +
+            ',' +
+            esc(r.source_page) +
+            ',' +
+            esc(r.evidence) +
+            ',' +
+            esc(r.uncertainty_reason),
+        )
+      }
+      if (supplementary.length > 0) {
+        lines.push('')
+        lines.push('section,page,content')
+        for (let i = 0; i < supplementary.length; i++) {
+          const s = supplementary[i] || {}
+          lines.push(
+            esc('informacao_complementar') + ',' + esc(s.page || '') + ',' + esc(s.text || ''),
+          )
+        }
+      }
+      e.response()
+        .header()
+        .set('Content-Disposition', 'attachment; filename="' + safeBase + '_dados.csv"')
+      return new ByteString(lines.join('\n'), 200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="' + safeBase + '_dados.csv"',
+      })
+    }
+
+    return e.json(200, {
+      import_id: importId,
+      filename: filename,
+      exam_id: examId,
+      exported_at: new Date().toISOString(),
+      biomarkers: rows,
+      supplementary_info: supplementary,
+    })
+  },
+  $apis.requireAuth(),
+)
