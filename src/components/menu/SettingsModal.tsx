@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,22 @@ import { useAuth } from '@/context/AuthContext'
 import { toast } from 'sonner'
 import pb from '@/lib/pocketbase/client'
 import {
+  clearTestData,
+  clearTestDataPreview,
+  CLEARABLE_LABELS,
+  type ClearTestDataResult,
+} from '@/services/clearTestData'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Settings,
   User as UserIcon,
   Shield,
@@ -23,6 +39,8 @@ import {
   Check,
   Smartphone,
   Save,
+  Trash2,
+  Loader2,
 } from 'lucide-react'
 
 interface SettingsModalProps {
@@ -38,6 +56,44 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [dailyDigest, setDailyDigest] = useState(true)
   const [medReminders, setMedReminders] = useState(true)
   const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'privacy'>('profile')
+  const [clearOpen, setClearOpen] = useState(false)
+  const [clearLoading, setClearLoading] = useState(false)
+  const [preview, setPreview] = useState<ClearTestDataResult | null>(null)
+
+  // Abre o diálogo de confirmação com a PRÉVIA (contagem por coleção, sem apagar).
+  const openClearDialog = async () => {
+    setClearOpen(true)
+    setPreview(null)
+    try {
+      setPreview(await clearTestDataPreview())
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || 'Erro ao calcular o que será apagado')
+      setClearOpen(false)
+    }
+  }
+
+  const handleClearTestData = async () => {
+    setClearLoading(true)
+    try {
+      const res = await clearTestData()
+      const failed =
+        res.failures && res.failures.length > 0 ? ` Atenção: ${res.failures.join('; ')}` : ''
+      toast.success(
+        `Dados de teste apagados: ${res.total_deleted} registro(s) zerados. O painel agora está em branco.${failed}`,
+        { duration: 6000 },
+      )
+      setClearOpen(false)
+      onOpenChange(false)
+      // Recarrega o app inteiro: Painel Hoje, Biomarcadores, Exames e Sources
+      // voltam ao estado inicial (vazios) — o usuário continua logado (token na authStore).
+      setTimeout(() => window.location.reload(), 400)
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || 'Erro ao limpar os dados de teste')
+      setClearLoading(false)
+    }
+  }
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -252,6 +308,32 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
           {activeTab === 'privacy' && (
             <div className="space-y-4 text-xs">
+              <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <Trash2 className="h-4 w-4 text-amber-600" />
+                  <p className="font-semibold text-foreground">
+                    Ferramenta de teste — Limpar dados
+                  </p>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Zera <b>todos os registros</b> deste perfil (medições, biomarcadores, exames,
+                  refeições, dietas, diário emocional, medicamentos, lembretes, importações…) para
+                  simular um cliente novo. <b>Não</b> afeta seu login, seu perfil, suas preferências
+                  nem as coleções do banco — apenas as linhas de dados.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1.5"
+                  disabled={clearLoading}
+                  onClick={openClearDialog}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Limpar dados de teste
+                </Button>
+              </div>
+
               <div className="p-3.5 rounded-xl border bg-muted/20 space-y-2">
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-emerald-600" />
@@ -284,6 +366,85 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           )}
         </div>
       </DialogContent>
+
+      {/* Confirmação da limpeza: lista o que será apagado (prévia real do banco) */}
+      <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              Limpar todos os dados de teste?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-xs">
+                <p>
+                  Esta ação apaga <b>permanentemente</b> os registros abaixo do seu perfil. Seu
+                  login, perfil e preferências são mantidos, e as coleções continuam existindo.
+                </p>
+                {preview ? (
+                  <div className="rounded-lg border bg-muted/30 p-2.5 max-h-52 overflow-y-auto space-y-1">
+                    {CLEARABLE_LABELS.map(({ collection, label }) => {
+                      const n = preview.totals?.[collection] || 0
+                      return (
+                        <div key={collection} className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-muted-foreground leading-snug">
+                            {label}
+                          </span>
+                          <span
+                            className={
+                              n > 0
+                                ? 'text-[11px] font-semibold text-foreground shrink-0'
+                                : 'text-[11px] text-muted-foreground/60 shrink-0'
+                            }
+                          >
+                            {n}
+                          </span>
+                        </div>
+                      )
+                    })}
+                    <div className="border-t pt-1.5 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold">Total</span>
+                      <span className="text-[11px] font-bold">{preview.total_deleted}</span>
+                    </div>
+                    {preview.failures && preview.failures.length > 0 && (
+                      <p className="text-[10px] text-amber-600">
+                        Aviso: {preview.failures.join('; ')}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-muted-foreground py-4 justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-[11px]">Contando registros…</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-red-600">
+                  Não é possível desfazer. Recomendado apenas para fins de teste da clínica.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={clearLoading || !preview}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={(e) => {
+                e.preventDefault()
+                handleClearTestData()
+              }}
+            >
+              {clearLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Apagando…
+                </>
+              ) : (
+                'Confirmar e apagar'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
