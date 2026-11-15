@@ -783,6 +783,103 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
         ident.laboratorio ||
         ident.responsavel_tecnico
       if (identHasData && !progress.identificacao) progress.identificacao = ident
+
+      // ---- Informações complementares + resumo, ACUMULADOS por lote ----
+      // Laudos descritivos (texto integral), trechos ilegíveis e a própria
+      // identificação vão para progress.supplementary — o último lote mescla
+      // isso em exams.supplementary_info, que alimenta a seção "Informações
+      // complementares" da revisão e a exportação.
+      if (!Array.isArray(progress.supplementary)) progress.supplementary = []
+      for (let k = 0; k < progress.laudos.length; k++) {
+        const l = progress.laudos[k]
+        // Dedupe: um laudo que já foi copiado de um lote anterior (mesma página
+        // + mesmo texto) não volta a cada tick de runner reprocessado.
+        const alreadyInSupp = progress.supplementary.some(function (s) {
+          return (
+            s.type === 'laudo' &&
+            String(s.page || '') === String(l.pagina != null ? l.pagina : '') &&
+            String(s.text || '') === String(l.texto || '')
+          )
+        })
+        if (alreadyInSupp) continue
+        progress.supplementary.push({
+          type: 'laudo',
+          name: l.nome_exame || 'Laudo descritivo',
+          page: l.pagina != null ? l.pagina : null,
+          date: l.data || '',
+          text: String(l.texto || ''),
+        })
+      }
+      for (let k = 0; k < progress.ilegiveis.length; k++) {
+        const it = progress.ilegiveis[k]
+        const alreadyInSupp2 = progress.supplementary.some(function (s) {
+          return (
+            s.type === 'ilegivel' &&
+            String(s.page || '') === String(it.pagina != null ? it.pagina : '') &&
+            String(s.text || '') === String(it.descricao || '')
+          )
+        })
+        if (alreadyInSupp2) continue
+        progress.supplementary.push({
+          type: 'ilegivel',
+          page: it.pagina != null ? it.pagina : null,
+          text: String(it.descricao || ''),
+        })
+      }
+      if (identHasData) {
+        const alreadyInSupp3 = progress.supplementary.some(function (s) {
+          return s.type === 'identificacao'
+        })
+        if (!alreadyInSupp3) {
+          progress.supplementary.push({
+            type: 'identificacao',
+            page: 1,
+            text: JSON.stringify(ident),
+          })
+        }
+      }
+
+      // progress.summaries alimenta o resumo consolidado (summary_results no
+      // fluxo de exame e o bloco "Resumo" da revisão de importação): cada
+      // resposta da IA contribui com a transcrição dos laudos descritivos e o
+      // consolidado final junta tudo (truncado a 4900 mais adiante).
+      if (!Array.isArray(progress.summaries)) progress.summaries = []
+      const batchSummaryParts = []
+      for (let k = 0; k < progress.laudos.length; k++) {
+        const l = progress.laudos[k]
+        batchSummaryParts.push(
+          '[Laudo: ' +
+            (l.nome_exame || 'descritivo') +
+            (l.data ? ' — ' + l.data : '') +
+            (l.pagina != null ? ' — pág. ' + l.pagina : '') +
+            ']\n' +
+            String(l.texto || ''),
+        )
+      }
+      for (let k = 0; k < progress.ilegiveis.length; k++) {
+        const it = progress.ilegiveis[k]
+        batchSummaryParts.push(
+          '[Trecho ilegível — pág. ' +
+            (it.pagina != null ? it.pagina : '?') +
+            '] ' +
+            String(it.descricao || ''),
+        )
+      }
+      if (ident.paciente || ident.laboratorio || ident.medico_solicitante) {
+        batchSummaryParts.push(
+          '[Identificação] Paciente: ' +
+            (ident.paciente || 'NÃO CONSTA') +
+            ' | Médico solicitante: ' +
+            (ident.medico_solicitante || 'NÃO CONSTA') +
+            ' | Laboratório: ' +
+            (ident.laboratorio || 'NÃO CONSTA'),
+        )
+      }
+      if (batchSummaryParts.length > 0) {
+        // Sumário por LOTE (não por página — laudos longos replicariam).
+        progress.summaries.push(batchSummaryParts.join('\n\n'))
+      }
+
       const aiMeta = {}
       if (!meta.exam_title) {
         for (let x = 0; x < exameList.length; x++) {
@@ -852,6 +949,19 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
       const overallStatus = finalMeta.overall_status === 'alterado' ? 'alterado' : 'normal'
       const aiExamTitle = finalMeta.exam_title || ''
       const aiExamType = finalMeta.exam_type || ''
+      // Identificação do laudo (seção 1 do transcritor): paciente, médico
+      // solicitante e laboratório preenchem os campos do exame na gravação
+      // final — NUNCA sobrescreve o que já está preenchido.
+      const identification = progress.identificacao || {}
+      const idPatient = String(identification.paciente || '').trim()
+      const idDoctor = String(identification.medico_solicitante || '').trim()
+      const idLab = String(identification.laboratorio || '').trim()
+      const idBirth = String(identification.data_nascimento || '').trim()
+      const idAge = String(identification.idade || '').trim()
+      const idSex = String(identification.sexo || '').trim()
+      const idConvenio = String(identification.convenio || '').trim()
+      const idUnit = String(identification.unidade || '').trim()
+      const idTech = String(identification.responsavel_tecnico || '').trim()
 
       let createdCount = 0
       let updatedCount = 0
@@ -902,6 +1012,22 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
                 newRec.set('unit', bio.unit || '')
                 newRec.set('reference_range', bio.reference_range || '')
                 newRec.set('status', bio.status || 'otimo')
+                // Sinalização impressa (H/L/ALTO/BAIXO/*) e resultados
+                // anteriores da MESMA linha do laudo (migration 0053).
+                newRec.set('sinalizacao', String(bio.sinalizacao || ''))
+                newRec.set('anteriores', String(bio.anteriores || ''))
+                // Ilegível NUNCA nasce aprovável: o valor "ILEGÍVEL" não é um
+                // resultado — revisão só deixa editar manualmente ou rejeitar.
+                if (bio.ilegivel) {
+                  newRec.set('validation_status', 'uncertain')
+                  newRec.set(
+                    'uncertainty_reason',
+                    'Trecho ilegível no documento (página ' +
+                      (bio.page != null && bio.page !== '' ? bio.page : '?') +
+                      ') — edite o valor manualmente ou rejeite para ir a Informações complementares.',
+                  )
+                }
+                if (bio.exame) newRec.set('notes', 'Exame: ' + String(bio.exame))
                 newRec.set('date', examDate || new Date().toISOString().slice(0, 10))
                 newRec.set('notes', 'Extraído por IA na importação de ' + titleHint)
                 newRec.set('source_exam', exam.id)
@@ -1005,6 +1131,19 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
             )
           }
 
+          // Identificação do laudo nos campos do exame (só preenche o vazio).
+          if (idPatient && !exam.getString('title').trim()) exam.set('title', idPatient)
+          if (idDoctor && !exam.getString('requesting_doctor'))
+            exam.set('requesting_doctor', idDoctor)
+          if (idLab && !exam.getString('laboratory')) exam.set('laboratory', idLab)
+          if (idBirth && !exam.getString('patient_birth_date'))
+            exam.set('patient_birth_date', idBirth)
+          if (idAge && !exam.getString('patient_age')) exam.set('patient_age', idAge)
+          if (idSex && !exam.getString('patient_sex')) exam.set('patient_sex', idSex)
+          if (idConvenio && !exam.getString('convenio')) exam.set('convenio', idConvenio)
+          if (idUnit && !exam.getString('lab_unit')) exam.set('lab_unit', idUnit)
+          if (idTech && !exam.getString('tech_responsible')) exam.set('tech_responsible', idTech)
+
           exam.set('analysis_status', 'awaiting_review')
           exam.set('analysis_error', '')
           exam.set('analysis_pages', '')
@@ -1106,6 +1245,18 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
         if (labName && !exam.getString('laboratory')) exam.set('laboratory', labName)
         if (aiExamType) exam.set('type', aiExamType)
         if (aiExamTitle && exam.getString('title') !== aiExamTitle) exam.set('title', aiExamTitle)
+        // Identificação do laudo nos campos do exame (só preenche o vazio —
+        // mesmo contrato do caminho de importação).
+        if (idDoctor && !exam.getString('requesting_doctor'))
+          exam.set('requesting_doctor', idDoctor)
+        if (idLab && !exam.getString('laboratory')) exam.set('laboratory', idLab)
+        if (idBirth && !exam.getString('patient_birth_date'))
+          exam.set('patient_birth_date', idBirth)
+        if (idAge && !exam.getString('patient_age')) exam.set('patient_age', idAge)
+        if (idSex && !exam.getString('patient_sex')) exam.set('patient_sex', idSex)
+        if (idConvenio && !exam.getString('convenio')) exam.set('convenio', idConvenio)
+        if (idUnit && !exam.getString('lab_unit')) exam.set('lab_unit', idUnit)
+        if (idTech && !exam.getString('tech_responsible')) exam.set('tech_responsible', idTech)
         exam.set('analysis_status', 'done')
         exam.set('analysis_error', '')
         exam.set('analysis_pages', '')

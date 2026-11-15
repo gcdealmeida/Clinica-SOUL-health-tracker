@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-15T08:51:35.903Z",
+  "generatedAt": "2026-11-15T09:26:28.541Z",
   "collections": [
     {
       "name": "users",
@@ -1512,6 +1512,48 @@
           "type": "json",
           "required": false,
           "system": false
+        },
+        {
+          "name": "patient_birth_date",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "patient_age",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "patient_sex",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "convenio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "requesting_doctor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "lab_unit",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tech_responsible",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1639,6 +1681,18 @@
         },
         {
           "name": "raw_content",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "sinalizacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "anteriores",
           "type": "text",
           "required": false,
           "system": false
