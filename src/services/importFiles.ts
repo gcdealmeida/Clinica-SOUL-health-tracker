@@ -57,6 +57,10 @@ export interface ImportReviewItem {
   source_page: string
   evidence: string
   uncertainty_reason: string
+  /** Sinalização impressa no laudo (H/L/ALTO/BAIXO/*). */
+  sinalizacao: string
+  /** Resultados anteriores impressos na mesma linha do laudo. */
+  anteriores: string
 }
 
 export function fileKindOf(file: File): ImportKind {
@@ -345,5 +349,7 @@ export async function loadStagedBiomarkers(opts: {
     source_page: r.source_page || '',
     evidence: r.evidence || '',
     uncertainty_reason: r.uncertainty_reason || '',
+    sinalizacao: r.sinalizacao || '',
+    anteriores: r.anteriores || '',
   }))
 }

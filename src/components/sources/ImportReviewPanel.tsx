@@ -10,9 +10,21 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import pb from '@/lib/pocketbase/client'
 import { loadStagedBiomarkers, submitImportReview } from '@/services/importFiles'
 import type { ImportReviewItem } from '@/services/importFiles'
-import { Loader2, Check, X, Pencil, ShieldAlert, CopyX, HelpCircle, ScrollText } from 'lucide-react'
+import {
+  Loader2,
+  Check,
+  X,
+  Pencil,
+  ShieldAlert,
+  CopyX,
+  HelpCircle,
+  ScrollText,
+  Info,
+  FileWarning,
+} from 'lucide-react'
 
 /**
  * Painel de REVISÃO da importação inteligente (v0.0.72).
@@ -53,6 +65,10 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
   const [editValue, setEditValue] = useState('')
   const [editUnit, setEditUnit] = useState('')
   const [summary, setSummary] = useState<ReviewSummary | null>(null)
+  /** Laudos descritivos, trechos ilegíveis e identificação (exams.supplementary_info). */
+  const [complementary, setComplementary] = useState<ComplementaryEntry[]>([])
+  /** Resumo consolidado do exame (exams.summary_results, truncado a 4900). */
+  const [examSummary, setExamSummary] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -67,6 +83,15 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
         toast.error('Não foi possível carregar os dados em revisão.')
       } finally {
         if (alive) setLoading(false)
+      }
+      // Informações complementares do exame (falha aqui NUNCA bloqueia a revisão).
+      try {
+        const exam = await pb.collection('exams').getOne(examId)
+        if (!alive) return
+        setComplementary(parseSupplementary(exam.supplementary_info))
+        setExamSummary(String(exam.summary_results || ''))
+      } catch (err) {
+        console.warn('[ImportReviewPanel] sem informações complementares:', err)
       }
     })()
     return () => {
@@ -85,11 +110,13 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
 
   const decide = (id: string, action: 'approve' | 'reject') => {
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? { ...i, validation_status: action === 'approve' ? 'approved' : 'rejected' }
-          : i,
-      ),
+      prev.map((i) => {
+        if (i.id !== id) return i
+        // ILEGÍVEL não pode ser aprovado: só editar manualmente (o que limpa o
+        // motivo) ou rejeitar — o valor "ILEGÍVEL" não é um resultado.
+        if (action === 'approve' && isIlegivel(i)) return i
+        return { ...i, validation_status: action === 'approve' ? 'approved' : 'rejected' }
+      }),
     )
   }
 
@@ -110,7 +137,7 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
   const approveAll = () => {
     setItems((prev) =>
       prev.map((i) =>
-        i.validation_status === 'pending' || i.validation_status === 'uncertain'
+        (i.validation_status === 'pending' || i.validation_status === 'uncertain') && !isIlegivel(i)
           ? { ...i, validation_status: 'approved' }
           : i,
       ),
@@ -132,6 +159,8 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
         status: i.status,
         source_page: i.source_page,
         evidence: i.evidence,
+        sinalizacao: i.sinalizacao,
+        anteriores: i.anteriores,
       }))
     if (decisions.length === 0) {
       toast.info('Nenhum item aprovado ou rejeitado ainda.')
@@ -221,6 +250,9 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
               <p className="text-xs text-muted-foreground">
                 {stats.pending.length} item(ns) aguardando decisão
                 {stats.uncertain.length > 0 ? ` • ${stats.uncertain.length} com incerteza` : ''}
+                {items.filter(isIlegivel).length > 0
+                  ? ` • ${items.filter(isIlegivel).length} ilegível(is)`
+                  : ''}
               </p>
               <Button
                 size="sm"
@@ -283,8 +315,31 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
                           {item.reference_range ? ` • Ref: ${item.reference_range}` : ''}
                           {item.date ? ` • ${item.date}` : ''}
                         </p>
+                        {item.anteriores ? (
+                          <p className="text-[11px] text-muted-foreground">
+                            <span className="font-semibold">Anteriores:</span> {item.anteriores}
+                          </p>
+                        ) : null}
                         <div className="flex gap-1 flex-wrap">
-                          {item.validation_status === 'uncertain' && (
+                          {isIlegivel(item) && (
+                            <Badge
+                              tone="red"
+                              icon={<FileWarning className="h-3 w-3" />}
+                              label="Ilegível"
+                              extra={
+                                item.uncertainty_reason && !/ileg/i.test(item.value)
+                                  ? item.uncertainty_reason
+                                  : undefined
+                              }
+                            />
+                          )}
+                          {sinalBadge(item.sinalizacao) && !isIlegivel(item) && (
+                            <Badge
+                              tone={sinalBadge(item.sinalizacao)!.tone}
+                              label={sinalBadge(item.sinalizacao)!.label}
+                            />
+                          )}
+                          {item.validation_status === 'uncertain' && !isIlegivel(item) && (
                             <Badge
                               tone="amber"
                               icon={<HelpCircle className="h-3 w-3" />}
@@ -364,13 +419,22 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
                           >
                             <X className="h-3 w-3" /> Rejeitar
                           </Button>
-                          <Button
-                            size="sm"
-                            className="h-7 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                            onClick={() => decide(item.id, 'approve')}
-                          >
-                            <Check className="h-3 w-3" /> Aprovar
-                          </Button>
+                          {isIlegivel(item) ? (
+                            <span
+                              className="inline-flex items-center h-7 px-2 rounded-md bg-muted text-[10px] font-medium text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
+                              title="Trecho ilegível no documento"
+                            >
+                              Ilegível — corrija manualmente ou rejeite
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="h-7 px-2 text-[11px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={() => decide(item.id, 'approve')}
+                            >
+                              <Check className="h-3 w-3" /> Aprovar
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -378,6 +442,78 @@ export function ImportReviewPanel({ examId, importId, onClose, onFinished }: Pan
                 )
               })}
             </div>
+
+            {/* Informações complementares: laudos descritivos, trechos ilegíveis, identificação e resumo */}
+            {(complementary.length > 0 || examSummary) && (
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-3 space-y-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Info className="h-3.5 w-3.5 text-slate-500" /> Informações complementares
+                </p>
+
+                {complementary.filter((c) => c.type === 'identificacao').length > 0 && (
+                  <div className="space-y-1">
+                    {complementary
+                      .filter((c) => c.type === 'identificacao')
+                      .map((c, idx) => (
+                        <p key={idx} className="text-[11px] text-foreground/90 whitespace-pre-line">
+                          {identificacaoTexto(c.text)}
+                        </p>
+                      ))}
+                  </div>
+                )}
+
+                {complementary.filter((c) => c.type === 'laudo').length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Laudos descritivos
+                    </p>
+                    {complementary
+                      .filter((c) => c.type === 'laudo')
+                      .map((c, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg border bg-background/70 p-2 space-y-0.5"
+                        >
+                          <p className="text-[11px] font-medium text-foreground">
+                            {c.name || 'Laudo descritivo'}
+                            {c.page != null && c.page !== '' ? ` — pág. ${c.page}` : ''}
+                          </p>
+                          <p className="text-[11px] text-foreground/85 whitespace-pre-line max-h-40 overflow-y-auto">
+                            {c.text}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                {complementary.filter((c) => c.type === 'ilegivel').length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold flex items-center gap-1">
+                      <FileWarning className="h-3 w-3" /> Trechos ilegíveis
+                    </p>
+                    {complementary
+                      .filter((c) => c.type === 'ilegivel')
+                      .map((c, idx) => (
+                        <p key={idx} className="text-[11px] text-foreground/85 whitespace-pre-line">
+                          {c.page != null && c.page !== '' ? `pág. ${c.page} — ` : ''}
+                          {c.text}
+                        </p>
+                      ))}
+                  </div>
+                )}
+
+                {examSummary ? (
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Resumo consolidado
+                    </p>
+                    <p className="text-[11px] text-foreground/85 whitespace-pre-line max-h-44 overflow-y-auto">
+                      {examSummary}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="outline" onClick={onClose} className="text-xs">
@@ -413,8 +549,8 @@ function Badge({
   label,
   extra,
 }: {
-  tone: 'amber' | 'orange' | 'red'
-  icon: React.ReactNode
+  tone: 'amber' | 'orange' | 'red' | 'blue'
+  icon?: React.ReactNode
   label: string
   extra?: string
 }) {
@@ -423,7 +559,9 @@ function Badge({
       ? 'bg-amber-100 text-amber-800 border-amber-200'
       : tone === 'orange'
         ? 'bg-orange-100 text-orange-800 border-orange-200'
-        : 'bg-red-100 text-red-800 border-red-200'
+        : tone === 'blue'
+          ? 'bg-sky-100 text-sky-800 border-sky-200'
+          : 'bg-red-100 text-red-800 border-red-200'
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}
@@ -435,6 +573,78 @@ function Badge({
       ) : null}
     </span>
   )
+}
+
+/** Entrada de exams.supplementary_info (laudo / ilegível / identificação). */
+interface ComplementaryEntry {
+  type?: string
+  name?: string
+  page?: number | string | null
+  text?: string
+}
+
+function parseSupplementary(raw: unknown): ComplementaryEntry[] {
+  if (!raw) return []
+  let parsed: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .filter((e) => e && typeof e === 'object')
+    .map((e: any) => ({
+      type: String(e.type || ''),
+      name: e.name != null ? String(e.name) : '',
+      page: e.page != null ? e.page : '',
+      text: String(e.text || ''),
+    }))
+}
+
+/** Identificação guardada como JSON no text — vira linha legível para o usuário. */
+function identificacaoTexto(text: string): string {
+  let obj: any = null
+  try {
+    obj = JSON.parse(text)
+  } catch {
+    return text
+  }
+  if (!obj || typeof obj !== 'object') return text
+  const parts: string[] = []
+  const push = (label: string, v: unknown) => {
+    const s = String(v || '').trim()
+    if (s) parts.push(`${label}: ${s}`)
+  }
+  push('Paciente', obj.paciente)
+  push('Nascimento', obj.data_nascimento)
+  push('Idade', obj.idade)
+  push('Sexo', obj.sexo)
+  push('Médico solicitante', obj.medico_solicitante)
+  push('Convênio', obj.convenio)
+  push('Laboratório', obj.laboratorio)
+  push('Unidade', obj.unidade)
+  push('Resp. técnico', obj.responsavel_tecnico)
+  return parts.length > 0 ? parts.join(' • ') : text
+}
+
+/** Item marcado ILEGÍVEL no staging (validation_status uncertain + motivo
+ * ILEGÍVEL, gravado pelo runner do exam_async). Ilegível nunca é aprovável. */
+function isIlegivel(item: ImportReviewItem): boolean {
+  return /ileg/i.test(item.uncertainty_reason || '') || /^ileg/i.test(item.value || '')
+}
+
+/** Badge da sinalização impressa no laudo (H/L/ALTO/BAIXO/*) — null quando não há. */
+function sinalBadge(s: string): { label: string; tone: 'red' | 'amber' | 'blue' } | null {
+  const v = String(s || '')
+    .trim()
+    .toUpperCase()
+  if (!v) return null
+  if (v === 'H' || v === 'ALTO') return { label: v === 'H' ? 'H — Alto' : 'Alto', tone: 'red' }
+  if (v === 'L' || v === 'BAIXO') return { label: v === 'L' ? 'L — Baixo' : 'Baixo', tone: 'blue' }
+  return { label: v, tone: 'amber' }
 }
 
 function SummaryBlock({ label, value }: { label: string; value: number }) {

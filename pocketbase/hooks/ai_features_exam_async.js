@@ -1016,20 +1016,18 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
                 // anteriores da MESMA linha do laudo (migration 0053).
                 newRec.set('sinalizacao', String(bio.sinalizacao || ''))
                 newRec.set('anteriores', String(bio.anteriores || ''))
-                // Ilegível NUNCA nasce aprovável: o valor "ILEGÍVEL" não é um
-                // resultado — revisão só deixa editar manualmente ou rejeitar.
-                if (bio.ilegivel) {
-                  newRec.set('validation_status', 'uncertain')
+                if (bio.exame) {
                   newRec.set(
-                    'uncertainty_reason',
-                    'Trecho ilegível no documento (página ' +
-                      (bio.page != null && bio.page !== '' ? bio.page : '?') +
-                      ') — edite o valor manualmente ou rejeite para ir a Informações complementares.',
+                    'notes',
+                    'Exame: ' +
+                      String(bio.exame) +
+                      ' — Extraído por IA na importação de ' +
+                      titleHint,
                   )
+                } else {
+                  newRec.set('notes', 'Extraído por IA na importação de ' + titleHint)
                 }
-                if (bio.exame) newRec.set('notes', 'Exame: ' + String(bio.exame))
                 newRec.set('date', examDate || new Date().toISOString().slice(0, 10))
-                newRec.set('notes', 'Extraído por IA na importação de ' + titleHint)
                 newRec.set('source_exam', exam.id)
                 newRec.set(
                   'source_page',
@@ -1047,6 +1045,19 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
                     ? String(bio.uncertainty_reason || 'IA não teve certeza do valor')
                     : '',
                 )
+                // Ilegível NUNCA nasce aprovável: o valor "ILEGÍVEL" não é um
+                // resultado — revisão só deixa editar manualmente ou rejeitar.
+                // Este set vem DEPOIS do bloco de confidence e NUNCA é
+                // sobrescrito por ele (ilegível vence).
+                if (bio.ilegivel) {
+                  newRec.set('validation_status', 'uncertain')
+                  newRec.set(
+                    'uncertainty_reason',
+                    'ILEGÍVEL — trecho ilegível no documento (página ' +
+                      (bio.page != null && bio.page !== '' ? bio.page : '?') +
+                      ') — edite o valor manualmente ou rejeite para ir a Informações complementares.',
+                  )
+                }
                 newRec.set(
                   'raw_content',
                   JSON.stringify({
@@ -1056,8 +1067,9 @@ cronAdd('examAnalysisRunner', '* * * * *', () => {
                 )
                 // Possível duplicado/conflicto: nome já existe no perfil —
                 // sinaliza para revisão (não sobrescreve silenciosamente).
+                // NUNCA sobrescreve o motivo de ILEGÍVEL (ilegível vence).
                 const dupOf = dupMap.get(normalizeKey(bio.name))
-                if (dupOf) {
+                if (dupOf && !bio.ilegivel) {
                   dupCount++
                   newRec.set('validation_status', 'uncertain')
                   const prev = String(dupOf.getString('value') || '')

@@ -264,6 +264,8 @@ routerAdd(
         validation_status: d.validation_status === 'uncertain' ? 'uncertain' : 'approved',
         uncertainty_reason: String(d.uncertainty_reason || '').slice(0, 490),
         raw_content: String(d.raw_content || value).slice(0, 1900),
+        sinalizacao: String(d.sinalizacao || ''),
+        anteriores: String(d.anteriores || ''),
       }
 
       // Decisão explícita de sobrescrever um registro existente (o usuário viu o
@@ -281,6 +283,8 @@ routerAdd(
           target.set('processing_date', trace.processing_date)
           target.set('validation_status', trace.validation_status)
           if (trace.uncertainty_reason) target.set('uncertainty_reason', trace.uncertainty_reason)
+          target.set('sinalizacao', trace.sinalizacao)
+          target.set('anteriores', trace.anteriores)
           $app.save(target)
           updated++
         } catch (err) {
@@ -330,6 +334,8 @@ routerAdd(
         prev.set('processing_date', trace.processing_date)
         prev.set('validation_status', trace.validation_status)
         if (trace.uncertainty_reason) prev.set('uncertainty_reason', trace.uncertainty_reason)
+        prev.set('sinalizacao', trace.sinalizacao)
+        prev.set('anteriores', trace.anteriores)
         $app.save(prev)
         updated++
         continue
@@ -350,6 +356,8 @@ routerAdd(
       recNew.set('processing_date', trace.processing_date)
       recNew.set('validation_status', trace.validation_status)
       recNew.set('uncertainty_reason', trace.uncertainty_reason)
+      recNew.set('sinalizacao', trace.sinalizacao)
+      recNew.set('anteriores', trace.anteriores)
       recNew.set('raw_content', trace.raw_content)
       $app.save(recNew)
       created++
@@ -456,16 +464,62 @@ routerAdd(
         date: String(r.getString('date') || ''),
         status: String(r.getString('status') || ''),
         validation_status: String(r.getString('validation_status') || ''),
+        sinalizacao: String(r.getString('sinalizacao') || ''),
+        anteriores: String(r.getString('anteriores') || ''),
         source_page: String(r.getString('source_page') || ''),
         evidence: String(r.getString('evidence') || ''),
         uncertainty_reason: String(r.getString('uncertainty_reason') || ''),
       })
     }
 
+    // Identificação do laudo (campos do exame, migration 0053).
+    let identificacao = null
+    try {
+      const exam = $app.findRecordById('exams', examId)
+      identificacao = {
+        paciente: String(exam.getString('title') || ''),
+        data_coleta: String(exam.getString('date') || ''),
+        data_nascimento: String(exam.getString('patient_birth_date') || ''),
+        idade: String(exam.getString('patient_age') || ''),
+        sexo: String(exam.getString('patient_sex') || ''),
+        medico_solicitante: String(exam.getString('requesting_doctor') || ''),
+        convenio: String(exam.getString('convenio') || ''),
+        laboratorio: String(exam.getString('laboratory') || ''),
+        unidade: String(exam.getString('lab_unit') || ''),
+        responsavel_tecnico: String(exam.getString('tech_responsible') || ''),
+      }
+      if (
+        !identificacao.paciente &&
+        !identificacao.medico_solicitante &&
+        !identificacao.laboratorio
+      ) {
+        identificacao = null
+      }
+    } catch (_) {}
+
+    const laudos = []
+    const ilegiveis = []
+    for (let i = 0; i < supplementary.length; i++) {
+      const s = supplementary[i] || {}
+      if (s.type === 'laudo') {
+        laudos.push({
+          nome_exame: String(s.nome_exame || ''),
+          data: String(s.data || ''),
+          page: s.page != null ? s.page : '',
+          texto: String(s.text || s.texto || ''),
+        })
+      } else if (s.type === 'ilegivel') {
+        ilegiveis.push({
+          page: s.page != null ? s.page : '',
+          descricao: String(s.descricao || s.text || ''),
+        })
+      }
+    }
+
     if (format === 'csv') {
       const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'
       const header =
-        'name,value,unit,reference_range,date,status,validation_status,source_page,evidence,uncertainty_reason'
+        'name,value,unit,reference_range,date,status,validation_status,sinalizacao,anteriores,source_page,evidence,uncertainty_reason'
       const lines = [header]
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
@@ -484,12 +538,63 @@ routerAdd(
             ',' +
             esc(r.validation_status) +
             ',' +
+            esc(r.sinalizacao) +
+            ',' +
+            esc(r.anteriores) +
+            ',' +
             esc(r.source_page) +
             ',' +
             esc(r.evidence) +
             ',' +
             esc(r.uncertainty_reason),
         )
+      }
+      if (identificacao) {
+        lines.push('')
+        lines.push('identificacao,campo,valor')
+        const idPairs = [
+          ['paciente', identificacao.paciente],
+          ['data_coleta', identificacao.data_coleta],
+          ['data_nascimento', identificacao.data_nascimento],
+          ['idade', identificacao.idade],
+          ['sexo', identificacao.sexo],
+          ['medico_solicitante', identificacao.medico_solicitante],
+          ['convenio', identificacao.convenio],
+          ['laboratorio', identificacao.laboratorio],
+          ['unidade', identificacao.unidade],
+          ['responsavel_tecnico', identificacao.responsavel_tecnico],
+        ]
+        for (let i = 0; i < idPairs.length; i++) {
+          if (String(idPairs[i][1] || '').trim()) {
+            lines.push(esc('identificacao') + ',' + esc(idPairs[i][0]) + ',' + esc(idPairs[i][1]))
+          }
+        }
+      }
+      if (laudos.length > 0) {
+        lines.push('')
+        lines.push('laudo,nome_exame,data,page,texto')
+        for (let i = 0; i < laudos.length; i++) {
+          const l = laudos[i]
+          lines.push(
+            esc('laudo') +
+              ',' +
+              esc(l.nome_exame) +
+              ',' +
+              esc(l.data) +
+              ',' +
+              esc(l.page) +
+              ',' +
+              esc(l.texto),
+          )
+        }
+      }
+      if (ilegiveis.length > 0) {
+        lines.push('')
+        lines.push('item_ilegivel,page,descricao')
+        for (let i = 0; i < ilegiveis.length; i++) {
+          const it = ilegiveis[i]
+          lines.push(esc('item_ilegivel') + ',' + esc(it.page) + ',' + esc(it.descricao))
+        }
       }
       if (supplementary.length > 0) {
         lines.push('')
@@ -517,6 +622,9 @@ routerAdd(
       exported_at: new Date().toISOString(),
       biomarkers: rows,
       supplementary_info: supplementary,
+      identificacao: identificacao,
+      laudos_textuais: laudos,
+      itens_ilegiveis: ilegiveis,
     })
   },
   $apis.requireAuth(),

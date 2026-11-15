@@ -253,6 +253,16 @@ export interface Exam {
   date: string
   laboratory?: string
   summary_results?: string
+  /** Laudos descritivos, trechos ilegíveis e identificação (JSON em array). */
+  supplementary_info?: string
+  /** Identificação do laudo (v0.0.77): paciente, médico, laboratório, datas. */
+  requesting_doctor?: string
+  patient_birth_date?: string
+  patient_age?: string
+  patient_sex?: string
+  convenio?: string
+  lab_unit?: string
+  tech_responsible?: string
   file?: string
   status?: 'normal' | 'alterado' | 'pendente'
   analysis_status?: ExamAnalysisStatus
