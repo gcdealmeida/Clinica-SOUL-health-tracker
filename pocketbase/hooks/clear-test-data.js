@@ -17,7 +17,8 @@
 //
 
 routerAdd(
-  'POST /backend/v1/data/clear-test-data',
+  'POST',
+  '/backend/v1/data/clear-test-data',
   (e) => {
     const auth = e.auth
     if (!auth || !auth.id) {

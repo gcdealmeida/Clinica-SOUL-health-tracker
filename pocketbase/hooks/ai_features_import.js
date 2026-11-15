@@ -32,7 +32,8 @@
 // import-assist: dedupe por hash + criação do exame + registro do import.
 // ---------------------------------------------------------------
 routerAdd(
-  'POST /backend/v1/ai/import-assist',
+  'POST',
+  '/backend/v1/ai/import-assist',
   (e) => {
     const auth = e.auth
     if (!auth) return e.json(401, { error: 'Autenticação obrigatória.' })
@@ -164,7 +165,8 @@ routerAdd(
 // import-kickoff: marca 'extracting' e dispara o runner imediatamente.
 // ---------------------------------------------------------------
 routerAdd(
-  'POST /backend/v1/ai/import-kickoff',
+  'POST',
+  '/backend/v1/ai/import-kickoff',
   (e) => {
     const auth = e.auth
     if (!auth) return e.json(401, { error: 'Autenticação obrigatória.' })
@@ -213,7 +215,8 @@ routerAdd(
 // import-review: gravação definitiva dos itens revisados.
 // ---------------------------------------------------------------
 routerAdd(
-  'POST /backend/v1/ai/import-review',
+  'POST',
+  '/backend/v1/ai/import-review',
   (e) => {
     const auth = e.auth
     if (!auth) return e.json(401, { error: 'Autenticação obrigatória.' })
@@ -397,7 +400,8 @@ routerAdd(
 // como JSON (?format=json, padrão) ou CSV (?format=csv).
 // ---------------------------------------------------------------
 routerAdd(
-  'GET /backend/v1/ai/import-export',
+  'GET',
+  '/backend/v1/ai/import-export',
   (e) => {
     const auth = e.auth
     if (!auth) return e.json(401, { error: 'Autenticação obrigatória.' })
