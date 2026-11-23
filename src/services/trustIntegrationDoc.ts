@@ -2,9 +2,11 @@
 // Exibido em Configurações → aba "Integração". NÃO contém o valor do secret:
 // ele vive na env var INSTITUTIONAL_TRUST_SECRET da plataforma (Skip Cloud).
 
-import { BACKEND_URL } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 
-export { BACKEND_URL }
+// O cliente PocketBase já nasce apontando para o backend da plataforma:
+// o mesmo origin resolve as rotas /backend/v1/... da integração.
+export const BACKEND_URL = pb.baseUrl.replace(/\/$/, '')
 
 export interface EndpointDoc {
   method: string

@@ -204,6 +204,30 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
   const sigOk = secretOk ? $security.hs256(email + '|' + ts, secret) : ''
   step('secret_configurado', secretOk, secretOk ? 'secret visível no runtime' : 'secret AUSENTE')
 
+  // No JSVM, $http.send devolve o corpo como ARRAY DE BYTES (não string):
+  // decodifica em blocos antes do JSON.parse (String.fromCharCode.apply
+  // estoura a pilha com arrays grandes).
+  const decodeBody = (raw) => {
+    if (typeof raw === 'string') return raw
+    if (raw && raw.constructor === Array) {
+      let out = ''
+      const CHUNK = 65536
+      for (let i = 0; i < raw.length; i += CHUNK) {
+        out += String.fromCharCode.apply(null, raw.slice(i, i + CHUNK))
+      }
+      return out
+    }
+    return ''
+  }
+  const parseBody = (raw) => {
+    const s = decodeBody(raw)
+    try {
+      return JSON.parse(s)
+    } catch (_) {
+      return s
+    }
+  }
+
   const post = (path, payload, headers) => {
     const res = $http.send({
       url: base + path,
@@ -211,27 +235,17 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
       headers: headers || { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    let body = res.body
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body)
-      } catch (_) {
-        body = body
-      }
+    return {
+      status: res.statusCode !== undefined ? res.statusCode : res.status,
+      body: parseBody(res.body),
     }
-    return { status: res.statusCode !== undefined ? res.statusCode : res.status, body: body }
   }
   const get = (path, headers) => {
     const res = $http.send({ url: base + path, method: 'GET', headers: headers || {} })
-    let body = res.body
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body)
-      } catch (_) {
-        body = body
-      }
+    return {
+      status: res.statusCode !== undefined ? res.statusCode : res.status,
+      body: parseBody(res.body),
     }
-    return { status: res.statusCode !== undefined ? res.statusCode : res.status, body: body }
   }
 
   // 1. Token inválido (secret errado) → 401
@@ -261,9 +275,11 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
 
   // 4. Token válido → 200 + token PocketBase
   r = post('/backend/v1/trust/token', { email: email, ts: ts, sig: sigOk })
+  // Booleanizar: nunca ecoar o token (rota pública — o token seria uma sessão
+  // válida do paciente exposta a quem chamar o selftest).
   step(
     'token_valido_200',
-    r.status === 200 && r.body && r.body.token,
+    !!(r.status === 200 && r.body && r.body.token),
     'status=' + r.status + ' role=' + (r.body && r.body.user && r.body.user.role),
   )
   const token = r.body && r.body.token
@@ -303,7 +319,7 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
     const recId = r.body && r.body.record_id
     step(
       'records_criado_201',
-      r.status === 201 && recId,
+      !!(r.status === 201 && recId),
       'status=' + r.status + ' id=' + recId + ' origem=' + (r.body && r.body.origin),
     )
 
@@ -338,15 +354,17 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
     )
     step('colecao_proibida_400', r.status === 400, 'status=' + r.status)
 
-    // Limpeza: apaga o que o teste criou (registro + usuário de teste).
+    // Limpeza: apaga o que o teste criou (registro; usuário só se for de teste).
     try {
       if (recId) {
         const rec = $app.findRecordById('health_metrics', recId)
         $app.delete(rec)
       }
     } catch (_) {}
+    // Só apaga o usuário quando ele foi CRIADO pelo selftest (e-mail @soultest.dev).
+    // Nunca apagar o paciente real informado por query string.
     try {
-      if (userId) {
+      if (userId && email.indexOf('@soultest.dev') !== -1) {
         const u = $app.findRecordById('users', userId)
         $app.delete(u)
       }
