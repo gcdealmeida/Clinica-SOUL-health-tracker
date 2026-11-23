@@ -41,7 +41,9 @@ import {
   Save,
   Trash2,
   Loader2,
+  Link2,
 } from 'lucide-react'
+import TrustIntegrationSection from './TrustIntegrationSection'
 
 interface SettingsModalProps {
   open: boolean
@@ -55,7 +57,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [saving, setSaving] = useState(false)
   const [dailyDigest, setDailyDigest] = useState(true)
   const [medReminders, setMedReminders] = useState(true)
-  const [activeTab, setActiveTab] = useState<'profile' | 'notifications' | 'privacy'>('profile')
+  const [activeTab, setActiveTab] = useState<
+    'profile' | 'notifications' | 'privacy' | 'integration'
+  >('profile')
   const [clearOpen, setClearOpen] = useState(false)
   const [clearLoading, setClearLoading] = useState(false)
   const [preview, setPreview] = useState<ClearTestDataResult | null>(null)
@@ -167,6 +171,18 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           >
             <Shield className="h-3.5 w-3.5" />
             Segurança & Privacidade
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('integration')}
+            className={`flex items-center gap-1.5 pb-2.5 px-2 text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'integration'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 font-semibold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Integração
           </button>
         </div>
 
@@ -364,6 +380,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </div>
             </div>
           )}
+
+          {activeTab === 'integration' && <TrustIntegrationSection />}
         </div>
       </DialogContent>
 
