@@ -121,6 +121,73 @@ export const WRITEABLE_COLLECTIONS = [
   'profile_biomarkers',
 ]
 
+// Campos REQUIRED reais do schema PocketBase de cada coleção gravável e os
+// que a API preenche automaticamente quando ausentes no payload.
+// ATENÇÃO: manter em sincronia com pocketbase/hooks/trust_api.js (auto-fill)
+// e com o schema real — se uma migration adicionar/tornar obrigatório um
+// campo, atualizar aqui.
+export interface WriteableCollectionDoc {
+  name: string
+  required: string[] // campos REQUIRED no schema
+  auto: string[] // campos que a API preenche sozinha se ausentes
+  note?: string
+}
+
+export const WRITEABLE_COLLECTIONS_DOC: WriteableCollectionDoc[] = [
+  {
+    name: 'health_metrics',
+    required: ['category', 'date_time'],
+    auto: ['category', 'date_time'],
+    note: 'category deriva do que foi enviado: texto → "sintoma", número → "outro".',
+  },
+  {
+    name: 'medical_records',
+    required: ['type', 'title'],
+    auto: ['title', 'date'],
+    note: 'type é classificação clínica (cirurgia|alergia|doenca_previa|medicamento_continuo) — a API NÃO inventa esse valor: envie-o.',
+  },
+  {
+    name: 'emotional_logs',
+    required: ['date', 'mood_score', 'mood_label'],
+    auto: ['date', 'mood_score', 'mood_label'],
+    note: 'mood_score 5/mood_label neutro é o preenchimento automático (sem valor clínico).',
+  },
+  {
+    name: 'diets',
+    required: ['title'],
+    auto: ['title', 'start_date'],
+  },
+  {
+    name: 'reminders',
+    required: ['type', 'title', 'date'],
+    auto: ['title', 'date', 'type'],
+    note: 'type usa "outro" quando ausente (remedio|exame|consulta|habito|outro).',
+  },
+  {
+    name: 'profile_conditions',
+    required: ['title', 'type'],
+    auto: ['title', 'type'],
+  },
+  { name: 'profile_allergies', required: ['allergen'], auto: ['allergen'] },
+  { name: 'profile_vaccinations', required: ['vaccine', 'date'], auto: ['vaccine', 'date'] },
+  { name: 'profile_events', required: ['title', 'date'], auto: ['title', 'date'] },
+  { name: 'profile_genetics', required: ['trait'], auto: ['trait'] },
+  {
+    name: 'profile_care_providers',
+    required: ['name', 'specialty'],
+    auto: ['name', 'specialty'],
+    note: 'specialty usa "Não informado" quando ausente.',
+  },
+  { name: 'profile_lifestyle', required: [], auto: [] },
+  {
+    name: 'medications',
+    required: ['name', 'routine'],
+    auto: ['name', 'routine'],
+    note: 'routine usa "once" quando ausente (daily|weekly|once).',
+  },
+  { name: 'profile_biomarkers', required: ['name', 'value'], auto: ['name'] },
+]
+
 export const HMAC_SNIPPET = `// Node.js (lado do app institucional)
 import crypto from 'node:crypto'
 

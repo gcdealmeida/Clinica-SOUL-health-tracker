@@ -354,11 +354,59 @@ routerAdd('GET', '/backend/v1/trust/selftest', (e) => {
     )
     step('colecao_proibida_400', r.status === 400, 'status=' + r.status)
 
+    // 11. Gravação SEM category e SEM date_time → 201 com auto-preenchimento
+    //     (a API completa os obrigatórios que consegue sozinha).
+    r = post(
+      '/backend/v1/trust/patients/' + encodeURIComponent(email) + '/records',
+      {
+        collection: 'health_metrics',
+        professional_name: 'Dra. Teste Integração',
+        data: { numeric_value: 72.5, unit: 'kg' },
+      },
+      authHeader,
+    )
+    const recAutoId = r.body && r.body.record_id
+    const autoFilledOk = r.body && r.body.auto_filled_fields && r.body.auto_filled_fields.length > 0
+    step(
+      'records_sem_category_201_auto_preenchido',
+      !!(r.status === 201 && recAutoId && autoFilledOk),
+      'status=' +
+        r.status +
+        ' id=' +
+        recAutoId +
+        ' auto=' +
+        (r.body && r.body.auto_filled_fields ? r.body.auto_filled_fields.join(',') : '-'),
+    )
+
+    // 12. O registro auto-preenchido tem date_time e category gravados?
+    let autoValid = false
+    if (recAutoId) {
+      try {
+        const recA = $app.findRecordById('health_metrics', recAutoId)
+        autoValid = recA.getString('date_time') !== '' && recA.getString('category') !== ''
+        step(
+          'registro_auto_preenchido_valido',
+          autoValid,
+          'category=' + recA.getString('category') + ' date_time=' + recA.getString('date_time'),
+        )
+      } catch (vErr2) {
+        step('registro_auto_preenchido_valido', false, vErr2.message)
+      }
+    } else {
+      step('registro_auto_preenchido_valido', false, 'sem record_id')
+    }
+
     // Limpeza: apaga o que o teste criou (registro; usuário só se for de teste).
     try {
       if (recId) {
         const rec = $app.findRecordById('health_metrics', recId)
         $app.delete(rec)
+      }
+    } catch (_) {}
+    try {
+      if (recAutoId && recAutoId !== recId) {
+        const recB = $app.findRecordById('health_metrics', recAutoId)
+        $app.delete(recB)
       }
     } catch (_) {}
     // Só apaga o usuário quando ele foi CRIADO pelo selftest (e-mail @soultest.dev).
@@ -626,6 +674,22 @@ routerAdd(
 
     const data = typeof body.data === 'object' && body.data !== null ? body.data : {}
     const nowIso = new Date().toISOString().slice(0, 10)
+    // "AAAA-MM-DD HH:MM" local — formato que o app grava em date_time/bdate.
+    const nowLocal = (() => {
+      const n = new Date()
+      const p = (x) => String(x).padStart(2, '0')
+      return (
+        n.getFullYear() +
+        '-' +
+        p(n.getMonth() + 1) +
+        '-' +
+        p(n.getDate()) +
+        ' ' +
+        p(n.getHours()) +
+        ':' +
+        p(n.getMinutes())
+      )
+    })()
 
     const col = $app.findCollectionByNameOrId(collection)
 
@@ -689,9 +753,94 @@ routerAdd(
       }
     }
     // Sinaliza campos que falharam (nome errado, tipo errado, select inválido).
-    const presentable = []
     const fields = col.fields
-    for (let i = 0; i < fields.length; i++) presentable.push(fields[i].name)
+    const hasField = (name) => !!record.collection().fields.getByName(name)
+    const nonEmpty = (v) => v !== '' && v !== null && v !== undefined
+
+    // ── Auto-preenchimento de campos OBRIGATÓRIOS (forma e data, nunca
+    // conteúdo clínico). O app institucional costuma mandar só o essencial:
+    // o hook completa o que a coleção exige para o save não falhar.
+    const autoFilled = []
+
+    // 1) Data/hora do registro — "agora" é o padrão correto de um registro
+    //    institucional. Cobre os nomes usados pelas coleções do app.
+    const DATE_FIELDS = ['date_time', 'date', 'start_date', 'diagnosed_date']
+    for (let i = 0; i < DATE_FIELDS.length; i++) {
+      const f = DATE_FIELDS[i]
+      if (!hasField(f)) continue
+      const cur = record.get(f)
+      if (!nonEmpty(cur)) {
+        record.set(f, nowLocal)
+        autoFilled.push(f)
+      }
+    }
+
+    // 2) category (health_metrics): deriva do tipo de dado enviado, sem
+    //    inventar valor clínico — texto → 'sintoma', número → 'outro'.
+    if (hasField('category') && !nonEmpty(record.get('category'))) {
+      const catOpts = record.collection().fields.getByName('category').values || []
+      const preferred =
+        nonEmpty(record.get('text_value')) && catOpts.indexOf('sintoma') !== -1
+          ? 'sintoma'
+          : nonEmpty(record.get('numeric_value')) && catOpts.indexOf('outro') !== -1
+            ? 'outro'
+            : 'outro'
+      if (catOpts.length === 0 || catOpts.indexOf(preferred) !== -1) {
+        record.set('category', preferred)
+        autoFilled.push('category')
+      }
+    }
+
+    // 3) type (reminders/profile_conditions): valor neutro de registro
+    //    institucional. Em medical_records o select só tem classificação
+    //    clínica (cirurgia|alergia|doenca_previa|medicamento_continuo) —
+    //    NÃO auto-preenche para não inventar classificação errada; o erro
+    //    claro abaixo pede o campo ao app institucional.
+    if (hasField('type') && !nonEmpty(record.get('type')) && collection !== 'medical_records') {
+      const tOpts = record.collection().fields.getByName('type').values || []
+      const preferred = tOpts.indexOf('outro') !== -1 ? 'outro' : 'Registro do app institucional'
+      if (tOpts.length === 0 || tOpts.indexOf(preferred) !== -1) {
+        record.set('type', preferred)
+        autoFilled.push('type')
+      }
+    }
+
+    // 4) Títulos/nomes obrigatórios — rótulo institucional genérico.
+    const TITLE_FIELDS = ['title', 'name', 'allergen', 'vaccine', 'trait']
+    for (let i = 0; i < TITLE_FIELDS.length; i++) {
+      const f = TITLE_FIELDS[i]
+      if (!hasField(f)) continue
+      if (!nonEmpty(record.get(f))) {
+        record.set(f, 'Registro do app institucional')
+        autoFilled.push(f)
+        break // um só campo de título basta (o resto é opcional na coleção)
+      }
+    }
+
+    // 5) mood_score/mood_label (emotional_logs) — neutro, sem valor clínico.
+    if (hasField('mood_score') && !nonEmpty(record.get('mood_score'))) {
+      record.set('mood_score', 5)
+      autoFilled.push('mood_score')
+    }
+    if (hasField('mood_label') && !nonEmpty(record.get('mood_label'))) {
+      record.set('mood_label', 'Registrado pelo app institucional')
+      autoFilled.push('mood_label')
+    }
+
+    // 6) routine (medications) — "once" é o default menos intrusivo.
+    if (hasField('routine') && !nonEmpty(record.get('routine'))) {
+      const rOpts = record.collection().fields.getByName('routine').values || []
+      if (rOpts.length === 0 || rOpts.indexOf('once') !== -1) {
+        record.set('routine', 'once')
+        autoFilled.push('routine')
+      }
+    }
+
+    // 7) specialty (profile_care_providers) — rótulo genérico.
+    if (hasField('specialty') && !nonEmpty(record.get('specialty'))) {
+      record.set('specialty', 'Não informado')
+      autoFilled.push('specialty')
+    }
 
     if (typeof record.get('notes') === 'string' && record.get('notes') !== '') {
       record.set(
@@ -700,7 +849,7 @@ routerAdd(
           ' — via app institucional' +
           (professionalName ? ' (' + professionalName + ')' : ''),
       )
-    } else if (record.collection().fields.getByName('notes')) {
+    } else if (hasField('notes')) {
       record.set(
         'notes',
         'Registrado via app institucional' +
@@ -708,8 +857,37 @@ routerAdd(
           '.',
       )
     }
-    if (record.collection().fields.getByName('evidence')) {
+    if (hasField('evidence')) {
       record.set('evidence', 'app_institucional' + (professionalName ? ':' + professionalName : ''))
+    }
+
+    // ── Últimos obrigatórios ainda vazios: erro CLARO em português, sem o
+    //    texto cru do PocketBase, dizendo o que a API preenche sozinha.
+    const missing = []
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]
+      if (!f.required) continue
+      const fname = f.name
+      if (fname === 'user') continue // sempre preenchido acima com o paciente
+      // bool required = tem que ser true (raro aqui); date/autodate nunca
+      // chegam vazios. O que interessa é texto/select/número obrigatório.
+      const isAutoFilled = autoFilled.indexOf(fname) !== -1
+      if (isAutoFilled) continue
+      const cur = record.get(fname)
+      const isEmpty =
+        cur === '' || cur === null || cur === undefined || (typeof cur === 'number' && isNaN(cur))
+      if (isEmpty) missing.push(fname)
+    }
+    if (missing.length) {
+      return e.json(400, {
+        error:
+          'Envie os campos obrigatórios: ' +
+          missing.join(', ') +
+          '. Os campos date_time (data/hora), category, type, title e datas de registro são preenchidos automaticamente pela API quando ausentes — este não pôde ser preenchido porque exige um valor específico.',
+        missing_fields: missing,
+        auto_filled_fields: autoFilled,
+        code: 'MISSING_REQUIRED_FIELDS',
+      })
     }
 
     try {
@@ -717,9 +895,12 @@ routerAdd(
     } catch (sErr) {
       return e.json(400, {
         error:
-          'Falha ao salvar: ' +
+          'Falha ao salvar o registro: ' +
           sErr.message +
-          (blocked.length ? ' | campos recusados: ' + blocked.join(', ') : ''),
+          '. Verifique se os valores enviados são válidos para esta coleção (ex.: category e type só aceitam valores da lista de opções).' +
+          (blocked.length
+            ? ' Campos recusados por nome/tipo inválido: ' + blocked.join(', ') + '.'
+            : ''),
         code: 'SAVE_FAILED',
       })
     }
@@ -744,6 +925,7 @@ routerAdd(
       professional: professionalName,
       professional_email: professionalEmail,
       ignored_fields: blocked,
+      auto_filled_fields: autoFilled,
       record: record.get('id') ? { id: record.id } : null,
     })
   },
