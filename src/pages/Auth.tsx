@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { toast } from 'sonner'
-import { Activity, ShieldCheck, Stethoscope, UserCircle, CheckCircle2 } from 'lucide-react'
+import { ShieldCheck, Stethoscope, UserCircle, CheckCircle2 } from 'lucide-react'
+import { SoulLogo } from '@/components/brand/SoulLogo'
 import { UserRole } from '@/types'
 
 export default function AuthPage() {
@@ -131,24 +132,18 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-background to-teal-50/30 flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen soul-bg flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg mb-3">
-            <Activity className="h-8 w-8" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Clínica Soul</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Seu portal integrado de saúde, longevidade e bem-estar
-          </p>
+          <SoulLogo />
         </div>
 
         {/* Demo Fast Fill Buttons */}
         <div className="mb-4 bg-white/70 dark:bg-card/70 border rounded-xl p-3 shadow-sm text-xs space-y-2">
           <div className="font-medium text-foreground flex items-center justify-between">
             <span>Acesso Rápido de Demonstração:</span>
-            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            <ShieldCheck className="h-4 w-4 text-soul-gold-deep" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -156,9 +151,9 @@ export default function AuthPage() {
               variant="outline"
               size="sm"
               onClick={() => fillQuickDemo('cliente')}
-              className="text-xs h-8 justify-start border-emerald-200 hover:bg-emerald-50"
+              className="text-xs h-8 justify-start border-soul-gold/40 hover:bg-soul-gold/10"
             >
-              <UserCircle className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+              <UserCircle className="h-3.5 w-3.5 mr-1 text-soul-gold-deep" />
               Entrar como Cliente
             </Button>
             <Button
@@ -208,7 +203,7 @@ export default function AuthPage() {
                             setForgotEmail(email)
                             setShowForgot(true)
                           }}
-                          className="text-xs text-emerald-600 hover:underline"
+                          className="text-xs text-soul-gold-deep hover:underline"
                         >
                           Esqueceu a senha?
                         </button>
@@ -226,7 +221,7 @@ export default function AuthPage() {
                   <CardFooter>
                     <Button
                       type="submit"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                       disabled={loading}
                     >
                       {loading ? 'Entrando...' : 'Acessar Conta'}
@@ -273,7 +268,7 @@ export default function AuthPage() {
                           htmlFor="role-cliente"
                           className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
                             role === 'cliente'
-                              ? 'border-emerald-600 bg-emerald-50/50 text-emerald-950 dark:bg-emerald-950/20'
+                              ? 'border-soul-gold-deep bg-soul-gold/15 text-soul-brown dark:bg-soul-gold/10'
                               : 'border-muted hover:bg-muted/50'
                           }`}
                         >
@@ -284,7 +279,7 @@ export default function AuthPage() {
                           htmlFor="role-prof"
                           className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
                             role === 'profissional'
-                              ? 'border-emerald-600 bg-emerald-50/50 text-emerald-950 dark:bg-emerald-950/20'
+                              ? 'border-soul-gold-deep bg-soul-gold/15 text-soul-brown dark:bg-soul-gold/10'
                               : 'border-muted hover:bg-muted/50'
                           }`}
                         >
@@ -322,7 +317,7 @@ export default function AuthPage() {
                   <CardFooter>
                     <Button
                       type="submit"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                       disabled={loading}
                     >
                       {loading ? 'Criando Conta...' : 'Cadastrar na Clínica Soul'}
@@ -356,7 +351,7 @@ export default function AuthPage() {
               <CardFooter className="flex flex-col gap-2">
                 <Button
                   type="submit"
-                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                   disabled={forgotLoading}
                 >
                   {forgotLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}

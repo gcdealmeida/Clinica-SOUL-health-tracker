@@ -9,6 +9,7 @@ import {
   Database,
   Users,
 } from 'lucide-react'
+import { SoulMark } from '@/components/brand/SoulLogo'
 import { Button } from '@/components/ui/button'
 import { UserMenuDropdown } from '@/components/menu/UserMenuDropdown'
 
@@ -42,22 +43,11 @@ export function Navbar({ currentTab }: NavbarProps) {
         {/* Brand */}
         <div className="flex items-center gap-3">
           <NavLink to="/" className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md">
-              <CalendarDays className="h-5 w-5 hidden" />
-              <svg
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 3c3 4 6 6.5 6 10a6 6 0 0 1-12 0c0-3.5 3-6 6-10Z" />
-              </svg>
-            </div>
+            <SoulMark className="h-9 w-9" />
             <div>
-              <span className="font-semibold text-lg tracking-tight text-foreground flex items-center gap-1.5">
+              <span className="font-display font-bold text-xl tracking-tight text-foreground flex items-baseline gap-1.5">
                 Clínica Soul
-                <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
+                <span className="hidden sm:inline text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans font-semibold">
                   Health Tracker
                 </span>
               </span>
@@ -76,7 +66,7 @@ export function Navbar({ currentTab }: NavbarProps) {
                 className={({ isActive }) =>
                   `flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold'
+                      ? 'bg-soul-gold/15 text-soul-brown dark:bg-soul-gold/10 dark:text-soul-gold-light font-semibold'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                   }`
                 }
@@ -96,7 +86,7 @@ export function Navbar({ currentTab }: NavbarProps) {
             <Button
               size="sm"
               onClick={() => navigate('/login')}
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Entrar
             </Button>
@@ -115,7 +105,7 @@ export function Navbar({ currentTab }: NavbarProps) {
               className={({ isActive }) =>
                 `flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-900/60 dark:text-emerald-200 font-semibold'
+                    ? 'bg-soul-gold/20 text-soul-brown dark:bg-soul-gold/15 dark:text-soul-gold-light font-semibold'
                     : 'text-muted-foreground hover:text-foreground'
                 }`
               }
