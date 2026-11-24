@@ -350,7 +350,9 @@ export default function InsightsPage() {
             <Lightbulb className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Insights</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
+              Insights
+            </h1>
             <p className="text-xs text-muted-foreground">
               Descubra correlações, tendências e padrões ocultos sobre a sua saúde
             </p>

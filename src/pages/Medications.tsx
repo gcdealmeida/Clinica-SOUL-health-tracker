@@ -143,7 +143,9 @@ export default function MedicationsPage() {
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-3xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Medicação Ingerida</h1>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Medicação Ingerida
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Cadastre o remédio, a dosagem, a rotina e os horários — ou registre uma toma pontual
             (sem rotina). Tudo aparece no painel Hoje.

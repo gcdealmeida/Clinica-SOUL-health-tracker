@@ -240,7 +240,9 @@ export default function MealsPage() {
       <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl space-y-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-foreground">Registro de Refeições com IA</h1>
+            <h1 className="font-display text-3xl font-semibold text-foreground">
+              Registro de Refeições com IA
+            </h1>
             <Badge className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-0 text-xs flex items-center gap-1">
               <Sparkles className="h-3 w-3" />
               Claude Vision
@@ -513,7 +515,7 @@ export default function MealsPage() {
         {/* Histórico de Refeições */}
         <section className="space-y-3 pt-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
               <UtensilsCrossed className="h-4 w-4 text-emerald-600" />
               Diário de Refeições ({meals.length})
             </h2>

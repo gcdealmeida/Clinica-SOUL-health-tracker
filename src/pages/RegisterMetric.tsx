@@ -815,7 +815,7 @@ export default function RegisterMetricPage() {
               <span className="p-2 rounded-xl bg-primary/10 text-primary">
                 <Sparkles className="h-5 w-5" />
               </span>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
                 Registrar Sinais & Hábitos
               </h1>
             </div>
@@ -874,7 +874,9 @@ export default function RegisterMetricPage() {
                     <IconComponent className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold tracking-tight">{currentDef.name}</h2>
+                    <h2 className="font-display text-xl font-semibold tracking-tight">
+                      {currentDef.name}
+                    </h2>
                     <p className="text-xs text-white/80">{currentDef.subtitle}</p>
                   </div>
                 </div>

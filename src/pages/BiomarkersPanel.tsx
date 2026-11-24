@@ -102,7 +102,8 @@ function MarkerCard({ m }: { m: PanelMarkerData }) {
                 <span
                   className={cn(
                     'inline-flex items-center gap-0.5 font-semibold',
-                    m.deltaDir === 'up' ? 'text-amber-600' : 'text-emerald-600',
+                    // Verde clínico real: queda do valor dentro da faixa de referência
+                    m.deltaDir === 'up' ? 'text-amber-600' : 'text-green-600',
                   )}
                 >
                   {m.deltaDir === 'up' ? (
@@ -268,7 +269,7 @@ export default function BiomarkersPanelPage() {
         {/* Cabeçalho */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground flex items-center gap-2">
               <FlaskConical className="h-6 w-6 text-primary" />
               Biomarcadores
             </h1>

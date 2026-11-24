@@ -121,7 +121,7 @@ export const EmotionalDiaryPage: React.FC = () => {
               </div>
 
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
+                <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight flex items-center gap-2.5">
                   <Award className="w-6 h-6 text-amber-300 shrink-0 hidden sm:inline" />
                   Diretrizes do Diário Emocional
                 </h1>
@@ -278,7 +278,9 @@ export const EmotionalDiaryPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-foreground">Seus Momentos & Check-ins</h2>
+                <h2 className="font-display text-xl font-semibold text-foreground">
+                  Seus Momentos & Check-ins
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   Cards cronológicos com carinha de humor, chips de emoções e notas estilo Daylio
                 </p>

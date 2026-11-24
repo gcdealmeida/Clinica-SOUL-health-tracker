@@ -676,7 +676,9 @@ export default function MetricDetailPage() {
               <Icon className={`h-5 w-5 ${def.colorClass}`} />
             </span>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold truncate">{meta.title}</h1>
+              <h1 className="font-display text-xl sm:text-2xl font-semibold truncate">
+                {meta.title}
+              </h1>
               <p className="text-xs text-muted-foreground">Acompanhamento ao longo do tempo</p>
             </div>
           </div>

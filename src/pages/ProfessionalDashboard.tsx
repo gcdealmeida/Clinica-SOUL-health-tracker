@@ -166,7 +166,7 @@ export default function ProfessionalDashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="font-display text-3xl font-semibold text-foreground">
                 Painel do Profissional Clínica Soul
               </h1>
               <Badge className="bg-amber-600 text-white text-xs">Visão Médica / Terapêutica</Badge>
@@ -260,7 +260,9 @@ export default function ProfessionalDashboardPage() {
                         {selectedClient.name ? selectedClient.name.slice(0, 2).toUpperCase() : 'CL'}
                       </div>
                       <div>
-                        <h2 className="text-lg font-bold text-foreground">{selectedClient.name}</h2>
+                        <h2 className="font-display text-xl font-semibold text-foreground">
+                          {selectedClient.name}
+                        </h2>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-0.5">
                           <span className="flex items-center gap-1">
                             <Mail className="h-3 w-3" /> {selectedClient.email}

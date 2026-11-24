@@ -94,7 +94,7 @@ export const Life360View: React.FC<Life360ViewProps> = ({ logs, onOpenCheckin })
               <Compass className="w-5 h-5" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-foreground">
+              <h2 className="font-display text-lg font-semibold text-foreground">
                 Avaliação da Vida 360º — {periodLabels[period].title}
               </h2>
               <p className="text-xs text-muted-foreground">

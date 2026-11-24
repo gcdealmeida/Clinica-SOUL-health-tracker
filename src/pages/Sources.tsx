@@ -36,7 +36,9 @@ export default function SourcesPage() {
       <Navbar currentTab="sources" />
       <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl space-y-5">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Fontes</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
+            Fontes
+          </h1>
           <p className="text-xs text-muted-foreground">
             De onde vêm seus dados: dispositivos, apps de saúde e sua equipe.
           </p>

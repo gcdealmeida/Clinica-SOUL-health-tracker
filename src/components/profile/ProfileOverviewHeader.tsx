@@ -147,7 +147,7 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+                  <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
                     {name || 'Meu Perfil'}
                   </h1>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">

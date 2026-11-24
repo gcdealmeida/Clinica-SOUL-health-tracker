@@ -112,7 +112,7 @@ export default function AiAnalysesPage() {
       <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl space-y-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="font-display text-3xl font-semibold text-foreground">
               Cruzamento Inteligente de Variáveis
             </h1>
             <Badge className="bg-gradient-to-r from-teal-600 to-emerald-600 text-white border-0 text-xs flex items-center gap-1">
@@ -248,7 +248,7 @@ export default function AiAnalysesPage() {
 
         {/* Histórico de Análises Anteriores */}
         <section className="space-y-3 pt-4">
-          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
             <History className="h-4 w-4 text-emerald-600" />
             Análises Salvas no Histórico ({history.length})
           </h2>

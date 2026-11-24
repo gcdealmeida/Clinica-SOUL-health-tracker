@@ -287,7 +287,9 @@ export default function ExamsAndDietsPage() {
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-5xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Exames, Dietas & Histórico Clínico</h1>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Exames, Dietas & Histórico Clínico
+          </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Mantenha seus exames laboratoriais, diretrizes nutricionais, cirurgias e alergias
             organizados
@@ -313,7 +315,7 @@ export default function ExamsAndDietsPage() {
           {/* TAB 1: EXAMES */}
           <TabsContent value="exames" className="space-y-4 mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground">
+              <h2 className="font-display text-lg font-semibold text-foreground">
                 Exames Laboratoriais e Diagnósticos
               </h2>
               <Button
@@ -573,7 +575,7 @@ export default function ExamsAndDietsPage() {
           {/* TAB 2: DIETAS */}
           <TabsContent value="dietas" className="space-y-4 mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground">
+              <h2 className="font-display text-lg font-semibold text-foreground">
                 Dietas e Prescrições Nutricionais
               </h2>
               <Button
@@ -738,7 +740,7 @@ export default function ExamsAndDietsPage() {
           {/* TAB 3: CIRURGIAS & ALERGIAS */}
           <TabsContent value="historico" className="space-y-4 mt-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground">
+              <h2 className="font-display text-lg font-semibold text-foreground">
                 Histórico Clínico: Cirurgias e Alergias
               </h2>
               <Button

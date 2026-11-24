@@ -168,7 +168,7 @@ export default function HomePage() {
         {/* Cabeçalho compacto */}
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
               Olá, {user?.name ? user.name.split(' ')[0] : 'Cliente Soul'} 👋
             </h1>
             <p className="text-xs text-muted-foreground">
@@ -199,7 +199,9 @@ export default function HomePage() {
         {/* Faixa horizontal do dia (estilo Guava) — topo do painel */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Hoje — linha do tempo</h2>
+            <h2 className="font-display text-base font-semibold text-foreground">
+              Hoje — linha do tempo
+            </h2>
             <div className="flex items-center gap-1.5">
               <QuickBtn
                 icon={Droplets}
@@ -246,7 +248,7 @@ export default function HomePage() {
         {/* Cards de métricas (estilo Guava) */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-foreground">Métricas</h2>
+            <h2 className="font-display text-base font-semibold text-foreground">Métricas</h2>
             <button
               type="button"
               onClick={() => setEditingCards((v) => !v)}
@@ -588,7 +590,8 @@ function MedCell({
     )
 
   const cls = taken
-    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-semibold'
+    ? // Verde/vermelho clínicos reais: dose tomada (verde) vs. dose perdida (vermelho)
+      'bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-300 font-semibold'
     : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 font-semibold'
   return (
     <button

@@ -174,7 +174,7 @@ export default function RecordsPage() {
             ) : (
               groupedByYear.map(([year, items]) => (
                 <div key={year} className="space-y-2">
-                  <h2 className="text-lg font-bold text-foreground">{year}</h2>
+                  <h2 className="font-display text-xl font-semibold text-foreground">{year}</h2>
                   <div className="rounded-2xl border bg-card divide-y divide-border overflow-hidden">
                     {items.map((r) => {
                       const cat = CATEGORY_ICON[r.category]
