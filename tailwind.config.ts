@@ -28,12 +28,34 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter var', 'SF Pro Display', 'system-ui', 'sans-serif'],
-        display: ['SF Pro Display', 'Inter var', 'system-ui', 'sans-serif'],
+        // Identidade Clínica Soul: serifada elegante de alto contraste para
+        // títulos/marca, ecoando o wordmark "SOUL" do logo.
+        display: ['"Cormorant Garamond"', 'Georgia', '"Times New Roman"', 'serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        // Paleta Clínica Soul (derivada do logo): dourados, marrons e cobre.
+        // Usar em toques discretos; semanticas de saude (verde/vermelho) ficam intactas.
+        soul: {
+          gold: {
+            light: '#E8D3A8',
+            DEFAULT: '#C9A05C',
+            deep: '#B98A44',
+          },
+          brown: {
+            light: '#6B4A38',
+            DEFAULT: '#5A3E2E',
+            deep: '#4A3226',
+          },
+          copper: {
+            light: '#C98A73',
+            DEFAULT: '#B06A52',
+          },
+          cream: '#FAF4EA',
+          sand: '#F3E9D9',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         primary: {

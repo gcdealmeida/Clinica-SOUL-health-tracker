@@ -1,7 +1,7 @@
 /* Global styles - Theme, font, utilities, animations and global components */
 
-/* CHANGE THE FONT BELOW TO WHATEVER YOU WANT */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+/* Identidade Clínica Soul: serifada de alto contraste (títulos/marca) + sans limpa (corpo/dados) */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400..700;1,400..700&family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -9,109 +9,186 @@
 
 @layer base {
   :root {
-    /* Change the colors to match the design system */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Paleta Clínica Soul (derivada do logo): fundos creme quentes, texto
+       marrom-escuro, dourado como primário e cobre como destaque secundário. */
+    --background: 36 43% 97%;
+    --foreground: 25 30% 17%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 38 50% 98%;
+    --card-foreground: 25 30% 17%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 38 50% 99%;
+    --popover-foreground: 25 30% 17%;
 
-    --primary: 222.2 84% 4.9%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 36 47% 57%; /* dourado médio #C9A05C */
+    --primary-foreground: 40 43% 12%; /* marrom profundo sobre dourado */
 
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 222.2 84% 4.9%;
+    --secondary: 36 42% 92%; /* areia quente */
+    --secondary-foreground: 25 30% 20%;
 
-    --muted: 210 40% 98%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 36 33% 92%;
+    --muted-foreground: 27 18% 40%;
 
-    --accent: 210 40% 98%;
-    --accent-foreground: 222.2 84% 4.9%;
+    --accent: 36 42% 92%;
+    --accent-foreground: 25 30% 17%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 35 30% 86%;
+    --input: 35 30% 84%;
+    --ring: 36 47% 57%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 38 45% 96%;
 
-    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-foreground: 25 30% 17%;
 
-    --sidebar-primary: 222.2 84% 4.9%;
+    --sidebar-primary: 36 47% 57%;
 
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 40 43% 12%;
 
-    --sidebar-accent: 210 40% 98%;
+    --sidebar-accent: 36 42% 92%;
 
-    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-accent-foreground: 25 30% 17%;
 
-    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-border: 35 30% 86%;
 
-    --sidebar-ring: 222.2 84% 4.9%;
+    --sidebar-ring: 36 47% 57%;
 
-    --chart-1: 34 100% 44%;
-    --chart-2: 189 100% 38%;
-    --chart-3: 209 100% 32%;
-    --chart-4: 42 100% 50%;
-    --chart-5: 33 100% 50%;
+    --chart-1: 36 47% 57%;
+    --chart-2: 18 42% 51%;
+    --chart-3: 25 30% 35%;
+    --chart-4: 40 55% 68%;
+    --chart-5: 30 25% 55%;
+
+    /* Cores de marca brutas (usadas nos gradientes/utilitários abaixo) */
+    --soul-gold-light: #e8d3a8;
+    --soul-gold: #c9a05c;
+    --soul-gold-deep: #b98a44;
+    --soul-brown: #5a3e2e;
+    --soul-brown-light: #6b4a38;
+    --soul-copper: #b06a52;
   }
 
   .dark {
-    /* Change the colors to match the design system consistent with the dark mode */
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Modo escuro na identidade: dourado sobre marrom profundo, nunca cinza estéril */
+    --background: 25 35% 8%;
+    --foreground: 36 45% 90%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 25 32% 11%;
+    --card-foreground: 36 45% 90%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 25 32% 12%;
+    --popover-foreground: 36 45% 90%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 84% 4.9%;
+    --primary: 40 52% 62%;
+    --primary-foreground: 25 45% 10%;
 
-    --secondary: 222.2 84% 4.9%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 25 25% 18%;
+    --secondary-foreground: 36 40% 88%;
 
-    --muted: 222.2 84% 4.9%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 25 25% 16%;
+    --muted-foreground: 34 20% 68%;
 
-    --accent: 222.2 84% 4.9%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 25 25% 19%;
+    --accent-foreground: 36 45% 90%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 222.2 84% 4.9%;
-    --input: 222.2 84% 4.9%;
-    --ring: 214.3 31.8% 91.4%;
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 222.2 84% 4.9%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222.2 84% 4.9%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222.2 84% 4.9%;
-    --sidebar-ring: 222.2 84% 4.9%;
+    --border: 28 22% 22%;
+    --input: 28 22% 24%;
+    --ring: 40 52% 62%;
 
-    --chart-1: 270 100% 44%;
-    --chart-2: 164 100% 38%;
-    --chart-3: 43 100% 32%;
-    --chart-4: 340 100% 50%;
-    --chart-5: 10 100% 50%;
+    --sidebar-background: 25 32% 10%;
+
+    --sidebar-foreground: 36 45% 90%;
+
+    --sidebar-primary: 40 52% 62%;
+
+    --sidebar-primary-foreground: 25 45% 10%;
+
+    --sidebar-accent: 25 25% 18%;
+
+    --sidebar-accent-foreground: 36 45% 90%;
+
+    --sidebar-border: 28 22% 22%;
+
+    --sidebar-ring: 40 52% 62%;
+
+    --chart-1: 40 52% 62%;
+    --chart-2: 18 48% 58%;
+    --chart-3: 36 30% 70%;
+    --chart-4: 40 40% 48%;
+    --chart-5: 30 30% 62%;
   }
 
   /* NEVER REMOVE THIS */
   section[aria-label='Notifications alt+T'] {
     padding: 0 !important;
     margin: 0 !important;
+  }
+}
+
+@layer components {
+  /* Título de página na serifada da marca (alto contraste, como o wordmark SOUL) */
+  .font-display {
+    font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  }
+
+  h1.font-display {
+    letter-spacing: -0.01em;
+  }
+
+  /* Caps espaçadas — ecoa "CLÍNICA" e "SAÚDE E BEM ESTAR" do logo */
+  .eyebrow {
+    font-size: 0.625rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--soul-gold-deep);
+  }
+
+  .dark .eyebrow {
+    color: var(--soul-gold-light);
+  }
+
+  /* Divisor decorativo com flor de lótus central (usado em telas de marca) */
+  .soul-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--soul-gold);
+  }
+
+  .soul-divider::before,
+  .soul-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--soul-gold-light),
+      var(--soul-gold-light),
+      transparent
+    );
+  }
+
+  /* Fundo acolhedor das telas de marca (login/loading): creme com brilho dourado */
+  .soul-bg {
+    background:
+      radial-gradient(1100px 500px at 50% -10%, rgba(232, 211, 168, 0.35), transparent 70%),
+      radial-gradient(900px 420px at 85% 110%, rgba(176, 106, 82, 0.1), transparent 70%), #faf4ea;
+  }
+
+  .dark .soul-bg {
+    background:
+      radial-gradient(1100px 500px at 50% -10%, rgba(201, 160, 92, 0.14), transparent 70%),
+      radial-gradient(900px 420px at 85% 110%, rgba(176, 106, 82, 0.12), transparent 70%), #241910;
   }
 }
 
