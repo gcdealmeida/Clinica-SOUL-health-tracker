@@ -43,7 +43,8 @@ export function Navbar({ currentTab }: NavbarProps) {
         {/* Brand */}
         <div className="flex items-center gap-3">
           <NavLink to="/" className="flex items-center gap-2.5">
-            <SoulMark className="h-9 w-9" />
+            {/* Símbolo oficial do infinito-DNA (recorte do SVG oficial) */}
+            <SoulMark className="h-9 w-auto" />
             <div>
               <span className="font-display font-bold text-xl tracking-tight text-foreground flex items-baseline gap-1.5">
                 Clínica Soul
