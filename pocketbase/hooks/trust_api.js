@@ -869,6 +869,7 @@ routerAdd(
       if (!f.required) continue
       const fname = f.name
       if (fname === 'user') continue // sempre preenchido acima com o paciente
+      if (fname === 'id') continue // campo de SISTEMA: required, mas nasce vazio — o PB gera no save
       // bool required = tem que ser true (raro aqui); date/autodate nunca
       // chegam vazios. O que interessa é texto/select/número obrigatório.
       const isAutoFilled = autoFilled.indexOf(fname) !== -1
