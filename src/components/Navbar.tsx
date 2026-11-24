@@ -9,7 +9,7 @@ import {
   Database,
   Users,
 } from 'lucide-react'
-import { SoulMark } from '@/components/brand/SoulLogo'
+import { SoulBrandLogo } from '@/components/brand/SoulLogo'
 import { Button } from '@/components/ui/button'
 import { UserMenuDropdown } from '@/components/menu/UserMenuDropdown'
 
@@ -42,17 +42,9 @@ export function Navbar({ currentTab }: NavbarProps) {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <NavLink to="/" className="flex items-center gap-2.5">
-            {/* Símbolo oficial do infinito-DNA (recorte do SVG oficial) */}
-            <SoulMark className="h-9 w-auto" />
-            <div>
-              <span className="font-display font-bold text-xl tracking-tight text-foreground flex items-baseline gap-1.5">
-                Clínica Soul
-                <span className="hidden sm:inline text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans font-semibold">
-                  Health Tracker
-                </span>
-              </span>
-            </div>
+          <NavLink to="/" className="flex items-center">
+            {/* Logo oficial completo: símbolo + SOUL + HEALTH TRACKER, bloco único */}
+            <SoulBrandLogo />
           </NavLink>
         </div>
 

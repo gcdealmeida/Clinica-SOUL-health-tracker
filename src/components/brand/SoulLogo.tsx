@@ -1,4 +1,5 @@
 import soulLogoFullUrl from '@/assets/soulhealthtrackerbege-1cc42.svg'
+import soulLogoRaw from '@/assets/soulhealthtrackerbege-1cc42.svg?raw'
 import { cn } from '@/lib/utils'
 
 /**
@@ -41,6 +42,42 @@ export function SoulLogo({ className }: { className?: string }) {
       src={soulLogoFullUrl}
       alt="Clínica Soul — Health Tracker"
       className={cn('block w-64 max-w-full select-none', className)}
+      draggable={false}
+    />
+  )
+}
+
+/**
+ * Bloco completo da marca para o cabeçalho: símbolo + SOUL + HEALTH TRACKER,
+ * como um único desenho. É o MESMO SVG oficial, apenas com a janela de
+ * visualização (viewBox) enquadrando símbolo e escritos e com o rect de fundo
+ * creme removido (fundo transparente no menu). Nenhum vetor é redesenhado.
+ */
+// Janela enquadra símbolo (y≈167–702, x≈132–768) e escritos abaixo dele.
+const BRAND_BLOCK_X = 100
+const BRAND_BLOCK_Y = 140
+const BRAND_BLOCK_WIDTH = 700
+const BRAND_BLOCK_HEIGHT = 580
+const brandBlockUrl =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    soulLogoRaw
+      .replace(
+        'width="887" height="887" viewBox="0 0 887 887"',
+        `width="${BRAND_BLOCK_WIDTH}" height="${BRAND_BLOCK_HEIGHT}" viewBox="${BRAND_BLOCK_X} ${BRAND_BLOCK_Y} ${BRAND_BLOCK_WIDTH} ${BRAND_BLOCK_HEIGHT}"`,
+      )
+      .replace('<rect id="fundo" width="100%" height="100%" fill="#F4EFE8"/>', ''),
+  )
+
+/** Logo completo (símbolo + escritos) para o cabeçalho, sem fundo creme. */
+export function SoulBrandLogo({ className }: { className?: string }) {
+  return (
+    <img
+      src={brandBlockUrl}
+      alt="Clínica Soul — Health Tracker"
+      width={BRAND_BLOCK_WIDTH}
+      height={BRAND_BLOCK_HEIGHT}
+      className={cn('block h-14 w-auto select-none', className)}
       draggable={false}
     />
   )
