@@ -154,7 +154,18 @@ export default function ProfessionalDashboardPage() {
         err?.response?.message ||
         err?.message ||
         'Falha inesperada ao contatar o serviço de IA.'
-      toast.error('Erro ao gerar análise: ' + detail, { duration: 8000 })
+      // status 0 sem corpo = a conexão com o backend morreu antes da resposta
+      // (tempo limite do gateway com o modelo gerando) — o SDK reporta isso
+      // como o genérico "Something went wrong"; traduzimos para a causa real.
+      const isNetworkLoss =
+        (err?.status === 0 || err?.isAbort) && (!detail || /something went wrong/i.test(detail))
+      toast.error(
+        'Erro ao gerar análise: ' +
+          (isNetworkLoss
+            ? 'tempo limite excedido ao gerar a síntese — tente novamente em alguns segundos.'
+            : detail),
+        { duration: 8000 },
+      )
     } finally {
       setRunningPatientAi(false)
     }

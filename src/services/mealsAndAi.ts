@@ -110,10 +110,25 @@ export const aiAnalysisService = {
     question?: string
     userId?: string
   }): Promise<{ insights: string; variables: string[] }> {
-    const res = await pb.send('/backend/v1/ai/analyze-correlations', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    })
+    const call = () =>
+      pb.send('/backend/v1/ai/analyze-correlations', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      })
+    let res: unknown
+    try {
+      res = await call()
+    } catch (err: any) {
+      // status 0 = a conexão morreu antes de qualquer resposta (timeout do
+      // gateway enquanto o modelo gerava) — é isso que o SDK reporta como
+      // "Something went wrong". Uma nova tentativa costuma bastar: o modelo
+      // rápido responde em poucos segundos quando o prompt já está quente.
+      if (err?.status === 0 || err?.isAbort) {
+        res = await call()
+      } else {
+        throw err
+      }
+    }
     return res as { insights: string; variables: string[] }
   },
 

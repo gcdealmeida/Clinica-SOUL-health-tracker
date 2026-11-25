@@ -24,7 +24,7 @@ routerAdd(
         'health_metrics',
         "user = '" + targetUserId + "'",
         '-date_time',
-        30,
+        15,
         0,
       )
       for (let i = 0; i < metrics.length; i++) {
@@ -51,7 +51,7 @@ routerAdd(
         'emotional_logs',
         "user = '" + targetUserId + "'",
         '-date',
-        10,
+        5,
         0,
       )
       healthSummary += '\nRegistros emocionais e humor recentes:\n'
@@ -82,7 +82,7 @@ routerAdd(
         'medical_records',
         "user = '" + targetUserId + "'",
         '-created',
-        10,
+        5,
         0,
       )
       if (meds.length > 0) {
@@ -103,11 +103,14 @@ routerAdd(
 
     // Coleta exames recentes do paciente (essencial na síntese da visão profissional)
     try {
+      // Apenas os 5 exames mais recentes e um resumo curto: o contexto inteiro
+      // no prompt estoura a janela de tokens e/ou estica a geração além do
+      // limite de tempo da requisição (falha genérica no cliente).
       const exames = $app.findRecordsByFilter(
         'exams',
         "user = '" + targetUserId + "'",
         '-date',
-        10,
+        5,
         0,
       )
       if (exames.length > 0) {
@@ -131,7 +134,7 @@ routerAdd(
             ex.getString('type') +
             ')' +
             (status ? ' [status: ' + status + ']' : '') +
-            (resumo ? ' Resumo: ' + String(resumo).slice(0, 400) : '') +
+            (resumo ? ' Resumo: ' + String(resumo).slice(0, 200) : '') +
             '\n'
         }
       }
@@ -144,7 +147,8 @@ routerAdd(
       'Sua função é cruzar as variáveis selecionadas pelo usuário (ex: sono, café, HRV, humor, alimentação) com os registros reais coletados no app, ' +
       'identificar padrões, correlações e apresentar observações práticas e encorajadoras em tom acolhedor e fundamentado. ' +
       'IMPORTANTE: Você não emite diagnósticos médicos definitivos nem laudos clínicos, e ressalta que correlações não garantem causalidade. ' +
-      'Formate a resposta de forma muito clara com tópicos, usando títulos e marcadores estruturados.'
+      'Formate a resposta de forma muito clara com tópicos, usando títulos e marcadores estruturados. ' +
+      'SEJA CONCISO: responda em no máximo 300 palavras, para a análise ficar rápida e objetiva.'
 
     const userPrompt =
       'Variáveis escolhidas para cruzamento: ' +
@@ -159,58 +163,108 @@ routerAdd(
       '3. Recomendações práticas de estilo de vida para discutir na próxima consulta da Clínica Soul;\n' +
       '4. Resumo em uma frase-chave.'
 
-    try {
+    // Uma tentativa = cascata de modelos (mesmo padrão do analyze-meal): fast -> reasoning.
+    const attempt = (summaryText, maxWords) => {
       const aiMessages = [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        {
+          role: 'user',
+          content:
+            'Variáveis escolhidas para cruzamento: ' +
+            (Array.isArray(variables) ? variables.join(', ') : variables) +
+            '\n' +
+            (question ? 'Dúvida do usuário: ' + question + '\n\n' : '\n') +
+            summaryText +
+            '\n\n' +
+            'Por favor, analise a relação entre essas variáveis com base nos registros, destacando:\n' +
+            '1. Padrões observados (ex: relação de cafeína tardia com HRV ou qualidade do sono);\n' +
+            '2. Tendências e conexões entre corpo e humor;\n' +
+            '3. Recomendações práticas de estilo de vida para discutir na próxima consulta da Clínica Soul;\n' +
+            '4. Resumo em uma frase-chave.\n' +
+            'Responda em no máximo ' +
+            maxWords +
+            ' palavras.',
+        },
       ]
-      // Cascata de modelos (mesmo padrão do analyze-meal): fast -> reasoning
       let reply = null
       try {
         reply = $ai.chat({ model: 'fast', messages: aiMessages })
       } catch (fastErr) {
         console.log(
-          'analyze-correlations: modelo fast falhou (' +
-            fastErr.message +
+          'analyze-correlations: modelo fast falhou (status=' +
+            (fastErr && fastErr.status !== undefined ? String(fastErr.status) : '?') +
+            ', code=' +
+            (fastErr && fastErr.code ? String(fastErr.code) : '?') +
+            ', err=' +
+            (fastErr && fastErr.message ? fastErr.message : String(fastErr)) +
             '), tentando modelo reasoning',
         )
         reply = $ai.chat({ model: 'reasoning', messages: aiMessages })
       }
-
-      const aiText =
-        reply.choices && reply.choices[0] && reply.choices[0].message
-          ? reply.choices[0].message.content
-          : 'Não foi possível gerar a análise no momento.'
-
-      // Salva o registro da análise no histórico
-      // (campo insights tem limite de 5000 caracteres — corta para caber)
-      try {
-        const aiCol = $app.findCollectionByNameOrId('ai_analyses')
-        const analysisRecord = new Record(aiCol)
-        analysisRecord.set('user', targetUserId)
-        analysisRecord.set(
-          'variables',
-          Array.isArray(variables) ? variables.join(', ') : String(variables),
-        )
-        if (question) analysisRecord.set('question', question)
-        analysisRecord.set('insights', aiText.slice(0, 4900))
-        analysisRecord.set('summary', aiText.slice(0, 150) + '...')
-        $app.save(analysisRecord)
-      } catch (saveErr) {
-        console.log('Erro ao salvar ai_analyses:', saveErr.message)
-      }
-
-      return e.json(200, {
-        insights: aiText,
-        variables: variables,
-        analyzedRecordsCount: 20,
-      })
-    } catch (aiErr) {
-      console.log('Erro ao chamar $ai.chat:', aiErr.message)
-      return e.json(500, {
-        error: 'Falha na inteligência artificial: ' + aiErr.message,
-      })
+      const content =
+        reply &&
+        reply.choices &&
+        reply.choices[0] &&
+        reply.choices[0].message &&
+        reply.choices[0].message.content
+          ? String(reply.choices[0].message.content)
+          : ''
+      if (!content) throw new Error('resposta vazia do modelo de IA')
+      return content
     }
+
+    let aiText = null
+    try {
+      aiText = attempt(healthSummary, 300)
+    } catch (aiErr) {
+      // Cascata completa falhou (ex.: "Something went wrong" do gateway com o
+      // contexto inteiro). Última tentativa: MESMA análise com contexto reduzido
+      // — cobre estouro de tokens/janela do provedor.
+      console.log(
+        'analyze-correlations: cascata fast->reasoning falhou (' +
+          (aiErr && aiErr.message ? aiErr.message : String(aiErr)) +
+          '); tentando novamente com contexto reduzido',
+      )
+      try {
+        aiText = attempt(String(healthSummary).slice(0, 3000), 150)
+      } catch (finalErr) {
+        // Loga e devolve o motivo REAL. 'message' e 'error' levam o mesmo texto:
+        // o SDK do PocketBase exibe body.message (sem ele, cai no fallback
+        // genérico "Something went wrong" no cliente) e a página lê body.error.
+        const detail =
+          'Falha na inteligência artificial: ' +
+          (finalErr && finalErr.status !== undefined
+            ? '[status=' + String(finalErr.status) + '] '
+            : '') +
+          (finalErr && finalErr.message ? finalErr.message : String(finalErr))
+        console.log('analyze-correlations: ' + detail)
+        return e.json(500, { error: detail, message: detail })
+      }
+    }
+
+    // Salva o registro da análise no histórico
+    // (campo insights tem limite de 5000 caracteres — corta para caber)
+    try {
+      const aiCol = $app.findCollectionByNameOrId('ai_analyses')
+      const analysisRecord = new Record(aiCol)
+      analysisRecord.set('user', targetUserId)
+      analysisRecord.set(
+        'variables',
+        Array.isArray(variables) ? variables.join(', ') : String(variables),
+      )
+      if (question) analysisRecord.set('question', question)
+      analysisRecord.set('insights', aiText.slice(0, 4900))
+      analysisRecord.set('summary', aiText.slice(0, 150) + '...')
+      $app.save(analysisRecord)
+    } catch (saveErr) {
+      console.log('Erro ao salvar ai_analyses:', saveErr.message)
+    }
+
+    return e.json(200, {
+      insights: aiText,
+      variables: variables,
+      analyzedRecordsCount: 20,
+    })
   },
   $apis.requireAuth(),
 )
