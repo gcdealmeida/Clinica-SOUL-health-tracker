@@ -200,8 +200,9 @@ export default function ProfessionalDashboardPage() {
           </div>
         </div>
 
-        {/* Duas colunas: Atualizações dos Clientes (esquerda) + Pacientes/Clientes (direita) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Duas colunas: Atualizações dos Clientes (esquerda) + Pacientes/Clientes (direita).
+            Breakpoint md (768px) — janelas desktop comuns têm < 1024px e com lg: caíam para 1 coluna. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           {/* Coluna da Esquerda: Últimas atualizações dos clientes */}
           <ClientFeedSummary />
 
