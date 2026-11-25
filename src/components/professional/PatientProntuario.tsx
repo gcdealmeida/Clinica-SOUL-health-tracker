@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import pb from '@/lib/pocketbase/client'
 import { healthService } from '@/services/health'
 import { medicalService } from '@/services/medical'
 import { emotionalService } from '@/services/emotional'
 import { mealService, aiAnalysisService } from '@/services/mealsAndAi'
+import { medicationService, Medication } from '@/services/medications'
 import { HealthMetric, Exam, Diet, EmotionalLog, Meal, MedicalRecord, User } from '@/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { Sparkles, Phone, Mail, Clock, BrainCircuit, Plus } from 'lucide-react'
 import React from 'react'
+import {
+  MedicacoesTab,
+  SintomasTab,
+  EmocionalTab,
+  BiomarcadoresTab,
+  ScoreGeralTab,
+  PatientBiomarkerRow,
+} from './PatientExtendedTabs'
 
 interface PatientProntuarioProps {
   client: User
@@ -20,8 +30,9 @@ interface PatientProntuarioProps {
 
 /**
  * Prontuário completo do paciente (header, Síntese IA, alertas e abas
- * Medidas/Exames/Refeições/Dietas). Reaproveitado pelo painel do profissional
- * e pela página própria do paciente (/profissional/paciente/:id).
+ * Medidas/Medicações/Sintomas/Emocional/Biomarcadores/Exames/Refeições/Dietas
+ * e Score Geral). Reaproveitado pelo painel do profissional e pela página
+ * própria do paciente (/profissional/paciente/:id).
  */
 export function PatientProntuario({ client }: PatientProntuarioProps) {
   // Dados do cliente
@@ -31,6 +42,8 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
   const [clientMeals, setClientMeals] = useState<Meal[]>([])
   const [clientEmotional, setClientEmotional] = useState<EmotionalLog[]>([])
   const [clientMedical, setClientMedical] = useState<MedicalRecord[]>([])
+  const [clientMeds, setClientMeds] = useState<Medication[]>([])
+  const [clientBiomarkers, setClientBiomarkers] = useState<PatientBiomarkerRow[]>([])
   const [loadingClientData, setLoadingClientData] = useState(true)
 
   // Nova prescrição rápida de dieta para o cliente
@@ -52,13 +65,23 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
     try {
       setLoadingClientData(true)
       setPatientAiInsights(null)
-      const [m, ex, d, meals, emo, med] = await Promise.all([
+      const [m, ex, d, meals, emo, med, meds, bioms] = await Promise.all([
         healthService.listUserMetrics(clientId, 50),
         medicalService.listExams(clientId),
         medicalService.listDiets(clientId),
         mealService.listMeals(clientId),
         emotionalService.listLogs(clientId, 20),
         medicalService.listMedicalRecords(clientId),
+        // Medicações e biomarcadores do paciente (a regra da coleção permite ao
+        // profissional ler registros dos clientes vinculados).
+        pb.collection('medications').getFullList({
+          filter: `user = "${clientId}"`,
+          sort: 'created',
+        }),
+        pb.collection('profile_biomarkers').getList(1, 100, {
+          filter: `user = "${clientId}"`,
+          sort: '-date',
+        }),
       ])
       setClientMetrics(m)
       setClientExams(ex)
@@ -66,6 +89,16 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
       setClientMeals(meals)
       setClientEmotional(emo)
       setClientMedical(med)
+      setClientMeds(meds.map((rec: any) => medicationService.fromRecord(rec)))
+      setClientBiomarkers(
+        bioms.items.map((rec: any) => ({
+          id: rec.id,
+          name: rec.name ?? rec.title ?? 'Biomarcador',
+          value: String(rec.value ?? ''),
+          unit: rec.unit ?? '',
+          date: rec.date ?? '',
+        })),
+      )
     } catch (err) {
       console.error(err)
       toast.error('Erro ao buscar dados do paciente')
@@ -101,8 +134,20 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
     try {
       const res = await aiAnalysisService.runCorrelationAnalysis({
         userId: client.id,
-        variables: ['sono', 'cafe', 'hrv', 'humor', 'pressao'],
-        question: 'Avaliação clínica global da evolução de saúde integrativa deste paciente.',
+        variables: [
+          'sono',
+          'cafe',
+          'hrv',
+          'humor',
+          'pressao',
+          // Histórico de uso pedido no prontuário completo:
+          'medicações e adesão',
+          'sintomas',
+          'atividade física',
+          'estilo de vida (diário emocional/Vida 360º)',
+        ],
+        question:
+          'Prontuário completo: avaliação clínica global do paciente integrando o histórico de uso — medicações e adesão, sintomas, atividade física, estilo de vida (diário emocional/Vida 360º) e biomarcadores.',
       })
       setPatientAiInsights(res.insights)
       toast.success('Síntese clínica gerada pela IA!')
@@ -209,9 +254,18 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
 
       {/* Abas com a evolução de saúde do paciente */}
       <Tabs defaultValue="medidas" className="w-full">
-        <TabsList className="grid grid-cols-4 max-w-lg">
+        <TabsList className="grid grid-cols-5 max-w-2xl">
           <TabsTrigger value="medidas" className="text-xs">
             Medidas ({clientMetrics.length})
+          </TabsTrigger>
+          <TabsTrigger value="medicacoes" className="text-xs">
+            Medicações ({clientMeds.length})
+          </TabsTrigger>
+          <TabsTrigger value="sintomas" className="text-xs">
+            Sintomas
+          </TabsTrigger>
+          <TabsTrigger value="emocional" className="text-xs">
+            Emocional 360º
           </TabsTrigger>
           <TabsTrigger value="exames" className="text-xs">
             Exames ({clientExams.length})
@@ -219,10 +273,31 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
           <TabsTrigger value="refeicoes" className="text-xs">
             Refeições ({clientMeals.length})
           </TabsTrigger>
+          <TabsTrigger value="biomarcadores" className="text-xs">
+            Biomarcadores ({clientBiomarkers.length})
+          </TabsTrigger>
           <TabsTrigger value="dietas" className="text-xs">
             Dietas ({clientDiets.length})
           </TabsTrigger>
+          <TabsTrigger value="score" className="text-xs">
+            Score Geral
+          </TabsTrigger>
         </TabsList>
+
+        {/* ABA MEDICAÇÕES */}
+        <TabsContent value="medicacoes" className="mt-4">
+          <MedicacoesTab meds={clientMeds} metrics={clientMetrics} loading={loadingClientData} />
+        </TabsContent>
+
+        {/* ABA SINTOMAS */}
+        <TabsContent value="sintomas" className="mt-4">
+          <SintomasTab metrics={clientMetrics} loading={loadingClientData} />
+        </TabsContent>
+
+        {/* ABA EMOCIONAL / VIDA 360º */}
+        <TabsContent value="emocional" className="mt-4">
+          <EmocionalTab logs={clientEmotional} />
+        </TabsContent>
 
         {/* ABA MEDIDAS */}
         <TabsContent value="medidas" className="space-y-3 mt-4">
@@ -367,6 +442,11 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
           )}
         </TabsContent>
 
+        {/* ABA BIOMARCADORES */}
+        <TabsContent value="biomarcadores" className="mt-4">
+          <BiomarcadoresTab biomarkers={clientBiomarkers} loading={loadingClientData} />
+        </TabsContent>
+
         {/* ABA DIETAS */}
         <TabsContent value="dietas" className="space-y-3 mt-4">
           <div className="flex items-center justify-between">
@@ -453,6 +533,11 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
                 : 'Nenhuma dieta cadastrada para este paciente.'}
             </div>
           )}
+        </TabsContent>
+
+        {/* ABA SCORE GERAL */}
+        <TabsContent value="score" className="mt-4">
+          <ScoreGeralTab metrics={clientMetrics} meds={clientMeds} logs={clientEmotional} />
         </TabsContent>
       </Tabs>
     </div>

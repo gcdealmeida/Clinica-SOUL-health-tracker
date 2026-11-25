@@ -61,7 +61,14 @@ const toMedication = (rec: any): Medication => ({
   times: parseList(rec.times).filter((t) => typeof t === 'string'),
 })
 
+/** Converte um registro cru do PocketBase em Medication (usado também pela visão do profissional). */
+export const toMedicationFromRecord = toMedication
+
 export const medicationService = {
+  /** Mapeia um registro cru da coleção `medications` para o tipo Medication. */
+  fromRecord(rec: Record<string, unknown>): Medication {
+    return toMedication(rec)
+  },
   /** Lista as medicações do usuário logado (as regras da coleção limitam ao dono). */
   async list(): Promise<Medication[]> {
     const records = await pb.collection('medications').getFullList({ sort: 'created' })

@@ -142,6 +142,154 @@ routerAdd(
       console.log('Erro ao buscar exams para síntese:', examErr.message)
     }
 
+    // Histórico de USO do paciente (visão profissional — prontuário completo):
+    // medicações cadastradas + tomas/adhesão, sintomas, atividade física e
+    // biomarcadores do perfil.
+    try {
+      const userMeds = $app.findRecordsByFilter(
+        'medications',
+        "user = '" + targetUserId + "'",
+        '-created',
+        20,
+        0,
+      )
+      if (userMeds.length > 0) {
+        healthSummary += '\nMedicações cadastradas pelo paciente:\n'
+        for (let i = 0; i < userMeds.length; i++) {
+          const md = userMeds[i]
+          let rotina = md.getString('routine')
+          if (rotina === 'weekly') {
+            let dias = ''
+            try {
+              dias = String(md.getString('weekdays') || '')
+            } catch (_) {}
+            rotina = 'semanal (dias ' + (dias || 'variados') + ')'
+          } else if (rotina === 'once') {
+            rotina = 'uso pontual'
+          } else {
+            rotina = 'diária'
+          }
+          healthSummary +=
+            '- ' +
+            md.getString('name') +
+            (md.getString('dosage') ? ' ' + md.getString('dosage') : '') +
+            ' — rotina: ' +
+            rotina +
+            '\n'
+        }
+
+        // Tomas registradas (health_metrics category 'remedio') nos últimos 7
+        // dias => adesão aproximada por nome da medicação.
+        const tomas = $app.findRecordsByFilter(
+          'health_metrics',
+          "user = '" + targetUserId + "' && category = 'remedio'",
+          '-date_time',
+          50,
+          0,
+        )
+        if (tomas.length > 0) {
+          healthSummary += '\nTomas de medicação registradas (mais recentes):\n'
+          for (let i = 0; i < tomas.length; i++) {
+            healthSummary +=
+              '- [' +
+              tomas[i].getString('date_time') +
+              '] ' +
+              tomas[i].getString('text_value') +
+              (tomas[i].getString('notes') ? ' (' + tomas[i].getString('notes') + ')' : '') +
+              '\n'
+          }
+        }
+      }
+    } catch (medErr) {
+      console.log('Erro ao buscar medications para síntese:', medErr.message)
+    }
+
+    try {
+      const sintomas = $app.findRecordsByFilter(
+        'health_metrics',
+        "user = '" + targetUserId + "' && category ~ 'sintom'",
+        '-date_time',
+        10,
+        0,
+      )
+      if (sintomas.length > 0) {
+        healthSummary += '\nSintomas registrados (mais recentes):\n'
+        for (let i = 0; i < sintomas.length; i++) {
+          const s = sintomas[i]
+          healthSummary +=
+            '- [' +
+            s.getString('date_time') +
+            '] ' +
+            (s.getString('text_value') || s.getString('category')) +
+            (s.getFloat('numeric_value') ? ' — severidade ' + s.getFloat('numeric_value') : '') +
+            (s.getString('notes') ? ' (' + s.getString('notes') + ')' : '') +
+            '\n'
+        }
+      }
+    } catch (sintErr) {
+      console.log('Erro ao buscar sintomas para síntese:', sintErr.message)
+    }
+
+    try {
+      const atividade = $app.findRecordsByFilter(
+        'health_metrics',
+        "user = '" + targetUserId + "' && category ~ 'exercic'",
+        '-date_time',
+        10,
+        0,
+      )
+      if (atividade.length > 0) {
+        healthSummary += '\nAtividade física registrada (mais recentes):\n'
+        for (let i = 0; i < atividade.length; i++) {
+          const a = atividade[i]
+          healthSummary +=
+            '- [' +
+            a.getString('date_time') +
+            '] ' +
+            (a.getString('text_value') || a.getString('category')) +
+            ' ' +
+            (a.getFloat('numeric_value') || '') +
+            ' ' +
+            a.getString('unit') +
+            '\n'
+        }
+      }
+    } catch (atErr) {
+      console.log('Erro ao buscar atividade física para síntese:', atErr.message)
+    }
+
+    try {
+      const bioms = $app.findRecordsByFilter(
+        'profile_biomarkers',
+        "user = '" + targetUserId + "'",
+        '-date',
+        15,
+        0,
+      )
+      if (bioms.length > 0) {
+        healthSummary += '\nBiomarcadores do perfil (mais recentes):\n'
+        for (let i = 0; i < bioms.length; i++) {
+          const b = bioms[i]
+          let nome = ''
+          let valor = ''
+          let unidade = ''
+          try {
+            nome = b.getString('name')
+          } catch (_) {}
+          try {
+            valor = b.getString('value')
+          } catch (_) {}
+          try {
+            unidade = b.getString('unit')
+          } catch (_) {}
+          if (!nome) nome = b.getString('title')
+          healthSummary += '- ' + nome + ': ' + valor + ' ' + unidade + '\n'
+        }
+      }
+    } catch (biomErr) {
+      console.log('Erro ao buscar profile_biomarkers para síntese:', biomErr.message)
+    }
+
     const systemPrompt =
       'Você é o assistente de inteligência artificial da Clínica Soul, especializado em saúde integrativa, longevidade e medicina do estilo de vida. ' +
       'Sua função é cruzar as variáveis selecionadas pelo usuário (ex: sono, café, HRV, humor, alimentação) com os registros reais coletados no app, ' +
@@ -176,11 +324,12 @@ routerAdd(
             (question ? 'Dúvida do usuário: ' + question + '\n\n' : '\n') +
             summaryText +
             '\n\n' +
-            'Por favor, analise a relação entre essas variáveis com base nos registros, destacando:\n' +
+            'Por favor, analise a evolução do paciente com base nos registros, destacando:\n' +
             '1. Padrões observados (ex: relação de cafeína tardia com HRV ou qualidade do sono);\n' +
-            '2. Tendências e conexões entre corpo e humor;\n' +
-            '3. Recomendações práticas de estilo de vida para discutir na próxima consulta da Clínica Soul;\n' +
-            '4. Resumo em uma frase-chave.\n' +
+            '2. Histórico de uso: adesão às medicações, sintomas recorrentes e atividade física;\n' +
+            '3. Tendências e conexões entre corpo e humor;\n' +
+            '4. Recomendações práticas de estilo de vida para discutir na próxima consulta da Clínica Soul;\n' +
+            '5. Resumo em uma frase-chave.\n' +
             'Responda em no máximo ' +
             maxWords +
             ' palavras.',
