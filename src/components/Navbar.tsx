@@ -21,10 +21,12 @@ export function Navbar({ currentTab }: NavbarProps) {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  // Navegação superior enxuta (padrão Guava): 6 destinos.
+  const isProfissional = user?.role === 'profissional'
+
+  // Navegação superior enxuta (padrão Guava): 6 destinos — SOMENTE visão cliente.
   // Registrar, Exames & Dietas, Refeições e Diário Emocional continuam com
   // suas rotas e são acessados a partir do Painel (quick actions/cards).
-  const navItems = [
+  const clientNavItems = [
     { to: '/', label: 'Painel', icon: CalendarDays },
     { to: '/profile', label: 'Profile', icon: UserCheck },
     { to: '/insights', label: 'Insights', icon: Lightbulb },
@@ -33,9 +35,10 @@ export function Navbar({ currentTab }: NavbarProps) {
     { to: '/sources', label: 'Sources', icon: Database },
   ]
 
-  if (user?.role === 'profissional') {
-    navItems.push({ to: '/profissional', label: 'Acompanhamento', icon: Users })
-  }
+  // Papel profissional não recebe a navegação de paciente: só o link do painel clínico.
+  const navItems = isProfissional
+    ? [{ to: '/profissional', label: 'Acompanhamento', icon: Users }]
+    : clientNavItems
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-card/95 backdrop-blur shadow-sm">
