@@ -14,18 +14,21 @@ function sinceKey(since: Date | null): number | null {
 /**
  * Carrega o feed dos clientes e o atualiza a cada `pollMs`.
  * `perSource` define quantos registros recentes são lidos de cada coleção;
- * `since` é aplicado como filtro real no banco (created >= since).
+ * `since` é aplicado como filtro real no banco (created >= since) e `kinds`
+ * como filtro real por tipo (múltipla escolha) em cada coleção de origem.
  */
 export function useClientFeed(
   perSource: number,
   since?: Date | null,
   pollMs: number = FEED_POLL_MS,
+  kinds: string[] = [],
 ) {
   const [events, setEvents] = useState<ClientFeedEvent[]>([])
   const [exhausted, setExhausted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const key = sinceKey(since)
+  const kindsKey = [...kinds].sort().join(',')
 
   useEffect(() => {
     let active = true
@@ -34,7 +37,7 @@ export function useClientFeed(
 
     const load = async () => {
       try {
-        const res = await fetchClientFeed({ perSource, since: sinceDate })
+        const res = await fetchClientFeed({ perSource, since: sinceDate, kinds })
         if (!active) return
         setEvents(res.events)
         setExhausted(res.exhausted)
@@ -54,7 +57,7 @@ export function useClientFeed(
       window.clearInterval(id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perSource, pollMs, key])
+  }, [perSource, pollMs, key, kindsKey])
 
   return { events, exhausted, loading, error }
 }

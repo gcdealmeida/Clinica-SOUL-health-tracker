@@ -99,7 +99,8 @@ export interface FeedFilters {
   period: FeedPeriod | ''
   clientId: string
   group: string
-  kind: string
+  /** Tipos selecionados (múltipla escolha). Vazio = todos os tipos. */
+  kinds: string[]
 }
 
 export const EMPTY_FEED_FILTERS: FeedFilters = {
@@ -107,7 +108,7 @@ export const EMPTY_FEED_FILTERS: FeedFilters = {
   period: '',
   clientId: '',
   group: '',
-  kind: '',
+  kinds: [],
 }
 
 /** Chave AAAA-MM-DD no fuso local. */
@@ -165,7 +166,7 @@ export function filterClientFeed(events: ClientFeedEvent[], f: FeedFilters): Cli
       (!f.day || localDayKey(e.at) === f.day) &&
       (!f.clientId || e.clientId === f.clientId) &&
       (!f.group || e.group === f.group) &&
-      (!f.kind || e.kind === f.kind),
+      (f.kinds.length === 0 || f.kinds.includes(e.kind)),
   )
 }
 

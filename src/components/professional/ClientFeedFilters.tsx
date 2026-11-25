@@ -50,11 +50,12 @@ export function ClientFeedFilters({ filters, onChange, clients }: ClientFeedFilt
   const set = (patch: Partial<FeedFilters>) => onChange({ ...filters, ...patch })
 
   const toggleKind = (value: string) => {
-    set({ kind: filters.kind === value ? '' : value })
+    const has = filters.kinds.includes(value)
+    set({ kinds: has ? filters.kinds.filter((k) => k !== value) : [...filters.kinds, value] })
   }
 
   const hasAnyFilter = Boolean(
-    filters.day || filters.period || filters.clientId || filters.group || filters.kind,
+    filters.day || filters.period || filters.clientId || filters.group || filters.kinds.length,
   )
 
   const selectedDate = filters.day
@@ -216,7 +217,7 @@ export function ClientFeedFilters({ filters, onChange, clients }: ClientFeedFilt
                 <div key={k.value} className="flex items-center gap-2 px-1">
                   <Checkbox
                     id={`feed-kind-${k.value}`}
-                    checked={filters.kind === k.value}
+                    checked={filters.kinds.includes(k.value)}
                     onCheckedChange={() => toggleKind(k.value)}
                     className="h-3.5 w-3.5"
                   />

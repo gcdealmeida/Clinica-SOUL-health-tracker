@@ -14,7 +14,7 @@ import {
 import { useClientFeed } from '@/hooks/use-client-feed'
 
 const PAGE_SIZE = 20
-const PER_SOURCE = 40
+const PER_SOURCE = 120
 
 /**
  * Feed dos Clientes: sidebar compacta de filtros à esquerda (período, calendário,
@@ -27,7 +27,8 @@ export default function ProfessionalFeedPage() {
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   const since = useMemo(() => feedSinceDate(filters), [filters])
-  const { events, exhausted, loading, error } = useClientFeed(PER_SOURCE, since)
+  const kinds = useMemo(() => filters.kinds, [filters.kinds.join(',')])
+  const { events, exhausted, loading, error } = useClientFeed(PER_SOURCE, since, undefined, kinds)
 
   const filtered = useMemo(() => filterClientFeed(events, filters), [events, filters])
 
@@ -78,9 +79,12 @@ export default function ProfessionalFeedPage() {
           </p>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="flex flex-col md:flex-row md:items-start gap-6">
           {/* Sidebar de filtros compacta (colapsa para o topo em telas pequenas) */}
-          <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Filtros do feed">
+          <aside
+            className="w-full md:w-60 md:shrink-0 md:sticky md:top-20"
+            aria-label="Filtros do feed"
+          >
             <ClientFeedFilters filters={filters} onChange={changeFilters} clients={clients} />
           </aside>
 

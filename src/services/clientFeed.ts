@@ -55,12 +55,23 @@ interface Mapped {
 
 interface SourceDef {
   collection: string
+  /** Campo da coleção que discrimina o tipo (quando há mais de um kind). */
+  kindField?: string
+  /** Prefixo do kind no feed correspondente ao kindField (ex.: 'metric:'). */
+  kindPrefix?: string
+  /** Todos os kinds do feed que esta coleção pode produzir. */
+  kinds: string[]
   map: (r: RecordModel) => Mapped
 }
+
+const METRIC_KINDS = Object.keys(METRIC_LABELS).map((c) => `metric:${c}`)
 
 const SOURCES: SourceDef[] = [
   {
     collection: 'health_metrics',
+    kindField: 'category',
+    kindPrefix: 'metric:',
+    kinds: METRIC_KINDS,
     map: (r) => {
       const cat = str(r.category)
       return {
@@ -73,6 +84,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     collection: 'meals',
+    kinds: ['refeicao'],
     map: (r) => ({
       group: 'alimentacao',
       kind: 'refeicao',
@@ -84,6 +96,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     collection: 'diets',
+    kinds: ['dieta'],
     map: (r) => ({
       group: 'dieta',
       kind: 'dieta',
@@ -93,6 +106,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     collection: 'emotional_logs',
+    kinds: ['humor'],
     map: (r) => ({
       group: 'emocional',
       kind: 'humor',
@@ -102,6 +116,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     collection: 'exams',
+    kinds: ['exame'],
     map: (r) => ({
       group: 'exames',
       kind: 'exame',
@@ -111,6 +126,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     collection: 'reminders',
+    kinds: ['lembrete'],
     map: (r) => ({
       group: 'lembretes',
       kind: 'lembrete',
@@ -131,6 +147,8 @@ export interface FetchClientFeedOptions {
   perSource: number
   /** Só traz registros criados a partir deste instante (filtro real no banco). */
   since?: Date | null
+  /** Tipos de atualização selecionados (múltipla escolha). Vazio = todos. */
+  kinds?: string[]
 }
 
 /**
@@ -141,16 +159,32 @@ export interface FetchClientFeedOptions {
 export async function fetchClientFeed({
   perSource,
   since,
+  kinds = [],
 }: FetchClientFeedOptions): Promise<ClientFeedResult> {
   const clients = await authService.listClients()
   const names = new Map(clients.map((c) => [c.id, c.name || c.email]))
 
   const createdFilter = since ? `created >= "${pbTimestamp(since)}"` : ''
+
+  // Filtro real no banco por múltiplos tipos: coleções sem nenhum tipo marcado
+  // nem são consultadas; health_metrics recebe um IN sobre as categorias.
+  const filterOf = (s: SourceDef): string | undefined => {
+    const conds: string[] = []
+    if (createdFilter) conds.push(createdFilter)
+    const wanted = kinds.filter((k) => s.kinds.includes(k))
+    if (wanted.length === 0) return 'id=""' // fonte fora do filtro: nada a buscar
+    if (s.kindField && s.kindPrefix && wanted.length < s.kinds.length) {
+      const cats = wanted.map((k) => k.slice(s.kindPrefix!.length))
+      conds.push(`(${cats.map((c) => `${s.kindField}='${c}'`).join(' || ')})`)
+    }
+    return conds.length > 0 ? conds.join(' && ') : undefined
+  }
+
   const results = await Promise.allSettled(
     SOURCES.map((s) =>
       pb.collection(s.collection).getList(1, perSource, {
         sort: '-created',
-        ...(createdFilter ? { filter: createdFilter } : {}),
+        filter: filterOf(s),
       }),
     ),
   )
