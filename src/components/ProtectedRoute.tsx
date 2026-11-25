@@ -1,5 +1,5 @@
 import React from 'react'
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { UserRole } from '@/types'
 
@@ -9,6 +9,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return (
@@ -20,6 +21,16 @@ export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Usuário profissional não deve ver telas de cliente (Painel Hoje, Profile,
+  // Insights, Biomarcadores...): é levado ao painel profissional. Cobrir o boot
+  // com sessão já existente (refresh) e o acesso manual a essas rotas.
+  const isProfessional = user.role === 'profissional'
+  const isClientScreen = !requiredRole // rotas dentro do bloco sem requiredRole
+
+  if (isProfessional && isClientScreen) {
+    return <Navigate to="/profissional" replace state={{ from: location }} />
   }
 
   if (requiredRole && user.role !== requiredRole && user.role !== 'profissional') {
