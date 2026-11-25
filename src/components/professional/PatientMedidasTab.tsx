@@ -61,7 +61,6 @@ import {
   RefLine,
 } from '@/lib/metricReference'
 import {
-  ReferenceNoteBlock,
   AllTimeStatsBlock,
   WeekdayStatsBlock,
   YearStatsBlock,
@@ -204,8 +203,13 @@ export function PatientMedidasTab({ clientId, metrics, loading }: PatientMedidas
     () => (def ? buildDualSeries(metricItems, period) : []),
     [metricItems, period, def],
   )
+  // buildSleepPhaseSeries não aceita a fase 'total' (o gráfico da aba Total é
+  // o gráfico principal, abaixo) — só calculamos a série das fases reais.
   const sleepSeries = useMemo(
-    () => (isSono ? buildSleepPhaseSeries(metricItems, period, sleepPhaseTab) : []),
+    () =>
+      isSono && sleepPhaseTab !== 'total'
+        ? buildSleepPhaseSeries(metricItems, period, sleepPhaseTab)
+        : [],
     [isSono, metricItems, period, sleepPhaseTab],
   )
 
@@ -235,7 +239,6 @@ export function PatientMedidasTab({ clientId, metrics, loading }: PatientMedidas
   )
   const goal = def ? goalFor(def.id) : null
   const refLines: RefLine[] = def ? refLinesFor(def.id) : []
-  const note = def ? (goalFor(def.id) ? (refLines.length ? null : null) : null) : null
 
   const fatData = useMemo(
     () => bodyFatSeries(metricItems).map((s) => ({ ...s, day: s.label })),

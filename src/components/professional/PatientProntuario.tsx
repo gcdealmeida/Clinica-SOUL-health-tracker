@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { Sparkles, Phone, Mail, Clock, BrainCircuit, Plus } from 'lucide-react'
+import { Sparkles, Phone, Mail, BrainCircuit, Plus } from 'lucide-react'
 import React from 'react'
 import {
   MedicacoesTab,
@@ -23,6 +23,7 @@ import {
   ScoreGeralTab,
   PatientBiomarkerRow,
 } from './PatientExtendedTabs'
+import { PatientMedidasTab } from './PatientMedidasTab'
 
 interface PatientProntuarioProps {
   client: User
@@ -299,55 +300,13 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
           <EmocionalTab logs={clientEmotional} />
         </TabsContent>
 
-        {/* ABA MEDIDAS */}
-        <TabsContent value="medidas" className="space-y-3 mt-4">
-          <h3 className="text-sm font-semibold text-foreground">
-            Histórico de Sinais Vitais e Hábitos Registrados
-          </h3>
-          {clientMetrics.length > 0 ? (
-            <div className="space-y-2 max-h-[420px] overflow-y-auto">
-              {clientMetrics.map((m) => (
-                <div
-                  key={m.id}
-                  className="p-2.5 rounded-lg border bg-card flex items-center justify-between text-xs"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-[10px] capitalize">
-                        {m.category}
-                      </Badge>
-                      <span className="font-semibold text-foreground">
-                        {m.numeric_value !== undefined && m.numeric_value !== null
-                          ? m.numeric_value
-                          : m.text_value}{' '}
-                        {m.unit}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {m.date_time}
-                      {m.notes && <span className="text-foreground/80">• {m.notes}</span>}
-                    </p>
-                  </div>
-                  {m.attachment && (
-                    <a
-                      href={m.attachment}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[11px] text-blue-600 underline"
-                    >
-                      Ver Anexo
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
-              {loadingClientData
-                ? 'Carregando medidas...'
-                : 'Nenhuma medida lançada por este paciente.'}
-            </div>
-          )}
+        {/* ABA MEDIDAS — modelo visual completo do app do cliente (somente leitura) */}
+        <TabsContent value="medidas" className="mt-4">
+          <PatientMedidasTab
+            clientId={client.id}
+            metrics={clientMetrics}
+            loading={loadingClientData}
+          />
         </TabsContent>
 
         {/* ABA EXAMES */}
