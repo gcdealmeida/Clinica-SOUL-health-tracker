@@ -22,6 +22,7 @@ import InsightsPage from '@/pages/Insights'
 import RecordsPage from '@/pages/Records'
 import SourcesPage from '@/pages/Sources'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
+import ProfessionalFeedPage from '@/pages/ProfessionalFeed'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
@@ -55,6 +56,7 @@ export default function App() {
             {/* Rota exclusiva para profissionais da Clínica Soul */}
             <Route element={<ProtectedRoute requiredRole="profissional" />}>
               <Route path="/profissional" element={<ProfessionalDashboardPage />} />
+              <Route path="/profissional/feed" element={<ProfessionalFeedPage />} />
             </Route>
 
             {/* 404 */}

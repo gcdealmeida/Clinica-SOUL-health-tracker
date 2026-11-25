@@ -7,6 +7,8 @@ import { emotionalService } from '@/services/emotional'
 import { mealService, aiAnalysisService } from '@/services/mealsAndAi'
 import { User, HealthMetric, Exam, Diet, EmotionalLog, Meal, MedicalRecord } from '@/types'
 import { Navbar } from '@/components/Navbar'
+import { SoulBrandLogo } from '@/components/brand/SoulLogo'
+import { ClientFeedSummary } from '@/components/professional/ClientFeedSummary'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -162,6 +164,8 @@ export default function ProfessionalDashboardPage() {
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 py-6 max-w-7xl space-y-6">
+        <SoulBrandLogo className="h-16 w-auto" />
+
         {/* Header do painel profissional */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
           <div>
@@ -177,6 +181,9 @@ export default function ProfessionalDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* Resumo do feed: últimas atualizações dos clientes */}
+        <ClientFeedSummary />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Coluna da Esquerda: Lista de Clientes */}
