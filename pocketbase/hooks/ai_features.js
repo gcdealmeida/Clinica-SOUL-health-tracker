@@ -101,6 +101,44 @@ routerAdd(
       }
     } catch (_) {}
 
+    // Coleta exames recentes do paciente (essencial na síntese da visão profissional)
+    try {
+      const exames = $app.findRecordsByFilter(
+        'exams',
+        "user = '" + targetUserId + "'",
+        '-date',
+        10,
+        0,
+      )
+      if (exames.length > 0) {
+        healthSummary += '\nExames recentes do paciente:\n'
+        for (let i = 0; i < exames.length; i++) {
+          const ex = exames[i]
+          let status = ''
+          let resumo = ''
+          try {
+            status = ex.getString('status')
+          } catch (_) {}
+          try {
+            resumo = ex.getString('summary_results')
+          } catch (_) {}
+          healthSummary +=
+            '- [' +
+            ex.getString('date') +
+            '] ' +
+            ex.getString('title') +
+            ' (' +
+            ex.getString('type') +
+            ')' +
+            (status ? ' [status: ' + status + ']' : '') +
+            (resumo ? ' Resumo: ' + String(resumo).slice(0, 400) : '') +
+            '\n'
+        }
+      }
+    } catch (examErr) {
+      console.log('Erro ao buscar exams para síntese:', examErr.message)
+    }
+
     const systemPrompt =
       'Você é o assistente de inteligência artificial da Clínica Soul, especializado em saúde integrativa, longevidade e medicina do estilo de vida. ' +
       'Sua função é cruzar as variáveis selecionadas pelo usuário (ex: sono, café, HRV, humor, alimentação) com os registros reais coletados no app, ' +
@@ -122,13 +160,22 @@ routerAdd(
       '4. Resumo em uma frase-chave.'
 
     try {
-      const reply = $ai.chat({
-        model: 'fast',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      })
+      const aiMessages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]
+      // Cascata de modelos (mesmo padrão do analyze-meal): fast -> reasoning
+      let reply = null
+      try {
+        reply = $ai.chat({ model: 'fast', messages: aiMessages })
+      } catch (fastErr) {
+        console.log(
+          'analyze-correlations: modelo fast falhou (' +
+            fastErr.message +
+            '), tentando modelo reasoning',
+        )
+        reply = $ai.chat({ model: 'reasoning', messages: aiMessages })
+      }
 
       const aiText =
         reply.choices && reply.choices[0] && reply.choices[0].message

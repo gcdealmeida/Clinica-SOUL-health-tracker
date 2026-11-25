@@ -146,8 +146,15 @@ export default function ProfessionalDashboardPage() {
       })
       setPatientAiInsights(res.insights)
       toast.success('Síntese clínica gerada pela IA!')
-    } catch (err) {
-      toast.error('Erro ao gerar análise')
+    } catch (err: any) {
+      // Mostra o detalhe devolvido pelo backend (ex: "Falha na inteligência
+      // artificial: ...") em vez de um erro genérico sem contexto.
+      const detail =
+        err?.response?.error ||
+        err?.response?.message ||
+        err?.message ||
+        'Falha inesperada ao contatar o serviço de IA.'
+      toast.error('Erro ao gerar análise: ' + detail, { duration: 8000 })
     } finally {
       setRunningPatientAi(false)
     }
