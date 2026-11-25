@@ -33,11 +33,12 @@ export function ClientFeedSummary() {
           <p role="alert" className="text-center py-6 text-xs text-destructive">
             Não foi possível carregar o feed agora.
           </p>
+        ) : latest.length === 0 ? (
+          <p className="text-center py-6 text-xs text-muted-foreground">
+            Nenhuma atualização dos clientes registrada ainda.
+          </p>
         ) : (
-          <ClientFeedList
-            events={latest}
-            emptyMessage="Nenhuma atualização dos clientes registrada ainda."
-          />
+          <ClientFeedList events={latest} />
         )}
       </CardContent>
     </Card>

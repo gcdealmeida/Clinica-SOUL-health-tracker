@@ -3,17 +3,12 @@ import { ClientFeedEvent, FEED_GROUP_LABELS, formatEventTime } from '@/lib/clien
 
 interface ClientFeedListProps {
   events: ClientFeedEvent[]
-  emptyMessage: string
 }
 
 /** Lista cronológica (mais recente primeiro) das atualizações dos clientes. */
-export function ClientFeedList({ events, emptyMessage }: ClientFeedListProps) {
+export function ClientFeedList({ events }: ClientFeedListProps) {
   if (events.length === 0) {
-    return (
-      <p className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
-        {emptyMessage}
-      </p>
-    )
+    return null
   }
 
   return (

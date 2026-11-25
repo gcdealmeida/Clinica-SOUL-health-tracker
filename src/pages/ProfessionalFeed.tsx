@@ -1,110 +1,128 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { Navbar } from '@/components/Navbar'
-import { Button } from '@/components/ui/button'
-import { useClientFeed } from '@/hooks/use-client-feed'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ClientFeedFilters } from '@/components/professional/ClientFeedFilters'
+import { ClientFeedList } from '@/components/professional/ClientFeedList'
 import {
   EMPTY_FEED_FILTERS,
   FeedFilters,
-  feedClientOptions,
-  feedKindOptions,
+  feedRangeLabel,
+  feedSinceDate,
   filterClientFeed,
+  normalizePeriodDay,
 } from '@/lib/clientFeed'
-import { ClientFeedFilters } from '@/components/professional/ClientFeedFilters'
-import { ClientFeedList } from '@/components/professional/ClientFeedList'
+import { useClientFeed } from '@/hooks/use-client-feed'
 
-const PAGE_STEP = 50
-const MAX_PER_SOURCE = 500
+const PAGE_SIZE = 20
+const PER_SOURCE = 40
 
-/** Feed completo das atualizações dos clientes, com filtros à esquerda e rolagem infinita. */
+/**
+ * Feed dos Clientes: sidebar compacta de filtros à esquerda (período, calendário,
+ * cliente, programa e tipos) e a lista de atualizações à direita, com rolagem
+ * infinita dentro do intervalo filtrado.
+ */
 export default function ProfessionalFeedPage() {
-  const [perSource, setPerSource] = useState(PAGE_STEP)
   const [filters, setFilters] = useState<FeedFilters>(EMPTY_FEED_FILTERS)
-  const { events, exhausted, loading, error } = useClientFeed(perSource)
-  const sentinelRef = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
 
-  const hasMore = !exhausted && perSource < MAX_PER_SOURCE
+  const since = useMemo(() => feedSinceDate(filters), [filters])
+  const { events, exhausted, loading, error } = useClientFeed(PER_SOURCE, since)
 
   const filtered = useMemo(() => filterClientFeed(events, filters), [events, filters])
-  const clients = useMemo(() => feedClientOptions(events), [events])
-  const kinds = useMemo(() => feedKindOptions(events), [events])
 
-  // Rolagem infinita: ao chegar no fim da lista, pede mais registros de cada coleção.
+  // Novo filtro ou novo lote de dados: volta ao topo da lista paginada.
+  useEffect(() => {
+    setVisible(PAGE_SIZE)
+  }, [filters, events])
+
+  // Rolagem infinita dentro do intervalo filtrado.
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el || !hasMore || loading) return
+    if (!el) return
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setPerSource((p) => Math.min(p + PAGE_STEP, MAX_PER_SOURCE))
+        if (entries[0]?.isIntersecting && !exhausted && visible < filtered.length) {
+          setVisible((v) => v + PAGE_SIZE)
         }
       },
       { rootMargin: '200px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [hasMore, loading, events.length])
+  }, [exhausted, visible, filtered.length])
+
+  const clients = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const e of events) map.set(e.clientId, e.clientName)
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name, 'pt-BR'),
+    )
+  }, [events])
+
+  const changeFilters = (next: FeedFilters) =>
+    setFilters((prev) => ({ ...prev, ...normalizePeriodDay(next) }))
+
+  const rangeLabel = feedRangeLabel(filters)
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="min-h-dvh bg-background">
       <Navbar />
-
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-7xl space-y-6">
-        <div className="flex flex-col gap-2 border-b pb-4">
-          <Link
-            to="/profissional"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Painel do profissional
-          </Link>
-          <h1 className="font-display text-3xl font-semibold text-foreground">Feed dos Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Tudo o que os clientes registram, do mais recente ao mais antigo · atualiza a cada 30
-            segundos
+      <main className="mx-auto w-full max-w-6xl px-4 py-6">
+        <header className="mb-6">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+            Feed dos Clientes
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Todas as atualizações lançadas pelos clientes no Health Tracker.
           </p>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <aside aria-label="Filtros do feed" className="lg:col-span-3 h-fit lg:sticky lg:top-4">
-            <ClientFeedFilters
-              filters={filters}
-              onChange={setFilters}
-              clients={clients}
-              kinds={kinds}
-            />
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+          {/* Sidebar de filtros compacta (colapsa para o topo em telas pequenas) */}
+          <aside className="lg:sticky lg:top-20 lg:self-start" aria-label="Filtros do feed">
+            <ClientFeedFilters filters={filters} onChange={changeFilters} clients={clients} />
           </aside>
 
-          <section aria-label="Atualizações" className="lg:col-span-9 space-y-4">
-            <p className="text-xs text-muted-foreground" aria-live="polite">
-              {loading
-                ? 'Carregando atualizações...'
-                : error && events.length === 0
-                  ? 'Não foi possível carregar o feed agora.'
-                  : `${filtered.length} atualização(ões) exibida(s)`}
-            </p>
-
-            {!loading && (
-              <ClientFeedList
-                events={filtered}
-                emptyMessage="Nenhuma atualização corresponde aos filtros."
-              />
+          {/* Lista de atualizações */}
+          <section aria-label="Atualizações dos clientes">
+            {rangeLabel && (
+              <p className="mb-3 text-xs text-muted-foreground" role="status">
+                Mostrando atualizações de: <span className="font-medium">{rangeLabel}</span>
+              </p>
             )}
 
-            {hasMore && !loading && (
-              <div className="flex flex-col items-center gap-2">
-                <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setPerSource((p) => Math.min(p + PAGE_STEP, MAX_PER_SOURCE))}
-                >
-                  Carregar mais atualizações
-                </Button>
+            {loading && events.length === 0 ? (
+              <div className="space-y-3" aria-busy="true" aria-label="Carregando atualizações">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                ))}
               </div>
+            ) : error ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                Não foi possível carregar o feed. Tente novamente em instantes.
+              </p>
+            ) : filtered.length === 0 ? (
+              <p className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                Nenhuma atualização encontrada com os filtros atuais.
+              </p>
+            ) : (
+              <>
+                <ClientFeedList events={filtered.slice(0, visible)} />
+                {visible < filtered.length && (
+                  <div ref={sentinelRef} className="h-8" aria-hidden="true" />
+                )}
+                {visible >= filtered.length && !exhausted && filtered.length > 0 && (
+                  <p className="py-3 text-center text-xs text-muted-foreground">
+                    Role para carregar mais — o intervalo filtrado é buscado no servidor.
+                  </p>
+                )}
+                {visible >= filtered.length && exhausted && filtered.length > 0 && (
+                  <p className="py-3 text-center text-xs text-muted-foreground">
+                    Você chegou ao fim das atualizações deste intervalo.
+                  </p>
+                )}
+              </>
             )}
           </section>
         </div>

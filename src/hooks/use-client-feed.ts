@@ -5,22 +5,36 @@ import { fetchClientFeed } from '@/services/clientFeed'
 /** Intervalo do "tempo real": o feed é recarregado periodicamente. */
 export const FEED_POLL_MS = 30000
 
+/** Estabiliza o instante "desde" entre renders (evita recarga a cada mudança de ms). */
+function sinceKey(since: Date | null): number | null {
+  if (!since) return null
+  return Math.floor(since.getTime() / 60000)
+}
+
 /**
  * Carrega o feed dos clientes e o atualiza a cada `pollMs`.
- * `perSource` define quantos registros recentes são lidos de cada coleção.
+ * `perSource` define quantos registros recentes são lidos de cada coleção;
+ * `since` é aplicado como filtro real no banco (created >= since).
  */
-export function useClientFeed(perSource: number, pollMs: number = FEED_POLL_MS) {
+export function useClientFeed(
+  perSource: number,
+  since?: Date | null,
+  pollMs: number = FEED_POLL_MS,
+) {
   const [events, setEvents] = useState<ClientFeedEvent[]>([])
   const [exhausted, setExhausted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const key = sinceKey(since)
 
   useEffect(() => {
     let active = true
+    // Filtro de intervalo real: recarrega com o "created >= ..." da data/período ativo.
+    const sinceDate = since ?? null
 
     const load = async () => {
       try {
-        const res = await fetchClientFeed(perSource)
+        const res = await fetchClientFeed({ perSource, since: sinceDate })
         if (!active) return
         setEvents(res.events)
         setExhausted(res.exhausted)
@@ -39,7 +53,8 @@ export function useClientFeed(perSource: number, pollMs: number = FEED_POLL_MS) 
       active = false
       window.clearInterval(id)
     }
-  }, [perSource, pollMs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perSource, pollMs, key])
 
   return { events, exhausted, loading, error }
 }

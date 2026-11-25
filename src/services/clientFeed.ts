@@ -27,6 +27,16 @@ function parseCreated(v: string): Date {
   return Number.isNaN(d.getTime()) ? new Date(0) : d
 }
 
+/** Timestamp AAAA-MM-DD HH:mm:ss.SSSZ exigido pelo PocketBase (fuso do navegador). */
+function pbTimestamp(d: Date): string {
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.` +
+    `${String(d.getMilliseconds()).padStart(3, '0')}Z`
+  )
+}
+
 function metricSummary(r: RecordModel): string {
   const value =
     typeof r.numeric_value === 'number'
@@ -86,7 +96,7 @@ const SOURCES: SourceDef[] = [
     map: (r) => ({
       group: 'emocional',
       kind: 'humor',
-      kindLabel: 'Humor',
+      kindLabel: 'Registro emocional',
       summary: `${str(r.mood_label)} (${str(r.mood_score)})`,
     }),
   },
@@ -116,16 +126,33 @@ export interface ClientFeedResult {
   exhausted: boolean
 }
 
+export interface FetchClientFeedOptions {
+  /** Quantos registros recentes ler de cada coleção (tamanho da página). */
+  perSource: number
+  /** Só traz registros criados a partir deste instante (filtro real no banco). */
+  since?: Date | null
+}
+
 /**
- * Busca os últimos `perSource` registros de cada coleção, junta tudo e ordena
- * do mais recente para o mais antigo. Só entram registros de clientes conhecidos.
+ * Busca os últimos `perSource` registros de cada coleção criados desde `since`,
+ * junta tudo e ordena do mais recente para o mais antigo. Só entram registros
+ * de clientes conhecidos.
  */
-export async function fetchClientFeed(perSource: number): Promise<ClientFeedResult> {
+export async function fetchClientFeed({
+  perSource,
+  since,
+}: FetchClientFeedOptions): Promise<ClientFeedResult> {
   const clients = await authService.listClients()
   const names = new Map(clients.map((c) => [c.id, c.name || c.email]))
 
+  const createdFilter = since ? `created >= "${pbTimestamp(since)}"` : ''
   const results = await Promise.allSettled(
-    SOURCES.map((s) => pb.collection(s.collection).getList(1, perSource, { sort: '-created' })),
+    SOURCES.map((s) =>
+      pb.collection(s.collection).getList(1, perSource, {
+        sort: '-created',
+        ...(createdFilter ? { filter: createdFilter } : {}),
+      }),
+    ),
   )
 
   if (results.every((r) => r.status === 'rejected')) {
