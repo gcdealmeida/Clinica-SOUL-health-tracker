@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T09:51:34.789Z",
+  "generatedAt": "2026-11-25T09:59:34.510Z",
   "collections": [
     {
       "name": "users",
@@ -29,21 +29,29 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "role",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["cliente", "profissional"]
+          "selectValues": [
+            "cliente",
+            "profissional"
+          ]
         },
         {
           "name": "phone",
@@ -139,14 +147,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "body_fat_pct",
@@ -219,7 +232,12 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["cirurgia", "alergia", "doenca_previa", "medicamento_continuo"]
+          "selectValues": [
+            "cirurgia",
+            "alergia",
+            "doenca_previa",
+            "medicamento_continuo"
+          ]
         },
         {
           "name": "title",
@@ -250,17 +268,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_medical_records_user ON medical_records (user)"]
+      "indexes": [
+        "CREATE INDEX idx_medical_records_user ON medical_records (user)"
+      ]
     },
     {
       "name": "emotional_logs",
@@ -327,14 +352,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "emotions",
@@ -415,7 +445,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE INDEX idx_emotional_logs_user_date ON emotional_logs (user, date DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_emotional_logs_user_date ON emotional_logs (user, date DESC)"
+      ]
     },
     {
       "name": "diets",
@@ -482,17 +514,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_diets_user ON diets (user)"]
+      "indexes": [
+        "CREATE INDEX idx_diets_user ON diets (user)"
+      ]
     },
     {
       "name": "meals",
@@ -517,7 +556,14 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["cafe_da_manha", "almoco", "lanche", "jantar", "ceia", "extra"]
+          "selectValues": [
+            "cafe_da_manha",
+            "almoco",
+            "lanche",
+            "jantar",
+            "ceia",
+            "extra"
+          ]
         },
         {
           "name": "date_time",
@@ -572,17 +618,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_meals_user_date ON meals (user, date_time DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_meals_user_date ON meals (user, date_time DESC)"
+      ]
     },
     {
       "name": "ai_analyses",
@@ -631,17 +684,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_ai_analyses_user ON ai_analyses (user, created DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_ai_analyses_user ON ai_analyses (user, created DESC)"
+      ]
     },
     {
       "name": "user_preferences",
@@ -672,14 +732,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "height_cm",
@@ -724,7 +789,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_user_preferences_user ON user_preferences (user)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_user_preferences_user ON user_preferences (user)"
+      ]
     },
     {
       "name": "medications",
@@ -767,7 +834,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["daily", "weekly", "once"]
+          "selectValues": [
+            "daily",
+            "weekly",
+            "once"
+          ]
         },
         {
           "name": "weekdays",
@@ -786,17 +857,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_medications_user ON medications (user)"]
+      "indexes": [
+        "CREATE INDEX idx_medications_user ON medications (user)"
+      ]
     },
     {
       "name": "profile_conditions",
@@ -851,17 +929,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_conditions_user ON profile_conditions (user)"]
+      "indexes": [
+        "CREATE INDEX idx_conditions_user ON profile_conditions (user)"
+      ]
     },
     {
       "name": "profile_allergies",
@@ -916,17 +1001,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_allergies_user ON profile_allergies (user)"]
+      "indexes": [
+        "CREATE INDEX idx_allergies_user ON profile_allergies (user)"
+      ]
     },
     {
       "name": "profile_vaccinations",
@@ -987,17 +1079,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_vaccinations_user ON profile_vaccinations (user, date DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_vaccinations_user ON profile_vaccinations (user, date DESC)"
+      ]
     },
     {
       "name": "profile_events",
@@ -1052,17 +1151,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_events_user ON profile_events (user, date DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_events_user ON profile_events (user, date DESC)"
+      ]
     },
     {
       "name": "profile_genetics",
@@ -1117,17 +1223,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_genetics_user ON profile_genetics (user)"]
+      "indexes": [
+        "CREATE INDEX idx_genetics_user ON profile_genetics (user)"
+      ]
     },
     {
       "name": "profile_care_providers",
@@ -1194,17 +1307,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_providers_user ON profile_care_providers (user)"]
+      "indexes": [
+        "CREATE INDEX idx_providers_user ON profile_care_providers (user)"
+      ]
     },
     {
       "name": "profile_lifestyle",
@@ -1283,17 +1403,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_lifestyle_user ON profile_lifestyle (user)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_lifestyle_user ON profile_lifestyle (user)"
+      ]
     },
     {
       "name": "reminders",
@@ -1318,7 +1445,13 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["remedio", "exame", "consulta", "habito", "outro"]
+          "selectValues": [
+            "remedio",
+            "exame",
+            "consulta",
+            "habito",
+            "outro"
+          ]
         },
         {
           "name": "title",
@@ -1343,14 +1476,23 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["none", "daily", "weekly", "monthly"]
+          "selectValues": [
+            "none",
+            "daily",
+            "weekly",
+            "monthly"
+          ]
         },
         {
           "name": "status",
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["pending", "completed", "cancelled"]
+          "selectValues": [
+            "pending",
+            "completed",
+            "cancelled"
+          ]
         },
         {
           "name": "notes",
@@ -1363,14 +1505,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -1437,21 +1584,30 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["normal", "alterado", "pendente"]
+          "selectValues": [
+            "normal",
+            "alterado",
+            "pendente"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "analysis_status",
@@ -1632,14 +1788,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "source_exam",
@@ -1671,7 +1832,12 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["approved", "pending", "uncertain", "rejected"]
+          "selectValues": [
+            "approved",
+            "pending",
+            "uncertain",
+            "rejected"
+          ]
         },
         {
           "name": "uncertainty_reason",
@@ -1698,7 +1864,9 @@
           "system": false
         }
       ],
-      "indexes": ["CREATE INDEX idx_biomarkers_user ON profile_biomarkers (user, date DESC)"]
+      "indexes": [
+        "CREATE INDEX idx_biomarkers_user ON profile_biomarkers (user, date DESC)"
+      ]
     },
     {
       "name": "exam_imports",
@@ -1754,7 +1922,14 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["received", "reading", "extracting", "awaiting_review", "saved", "error"]
+          "selectValues": [
+            "received",
+            "reading",
+            "extracting",
+            "awaiting_review",
+            "saved",
+            "error"
+          ]
         },
         {
           "name": "error_message",
@@ -1815,21 +1990,30 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["not_started", "in_progress", "approved"]
+          "selectValues": [
+            "not_started",
+            "in_progress",
+            "approved"
+          ]
         },
         {
           "name": "created",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
