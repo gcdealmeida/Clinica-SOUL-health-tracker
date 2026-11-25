@@ -149,6 +149,8 @@ export interface FetchClientFeedOptions {
   since?: Date | null
   /** Tipos de atualização selecionados (múltipla escolha). Vazio = todos. */
   kinds?: string[]
+  /** Só traz registros deste usuário (histórico de um paciente). Vazio = todos. */
+  clientId?: string
 }
 
 /**
@@ -161,17 +163,31 @@ export async function fetchClientFeed({
   perSource,
   since,
   kinds = [],
+  clientId,
 }: FetchClientFeedOptions): Promise<ClientFeedResult> {
-  const clients = await authService.listClients()
-  const names = new Map(clients.map((c) => [c.id, c.name || c.email]))
+  let names = new Map<string, string>()
+  if (clientId) {
+    // Histórico de um paciente: resolve o nome direto na coleção de usuários.
+    try {
+      const rec = await pb.collection('users').getOne(clientId)
+      names.set(clientId, str(rec.name) || str(rec.email))
+    } catch {
+      // Paciente inexistente/sem acesso: segue sem nome (a lista sai vazia).
+    }
+  } else {
+    const clients = await authService.listClients()
+    names = new Map(clients.map((c) => [c.id, c.name || c.email]))
+  }
 
   const createdFilter = since ? `created >= "${pbTimestamp(since)}"` : ''
+  const userFilter = clientId ? `user = "${clientId}"` : ''
 
   // Filtro real no banco por múltiplos tipos: coleções sem nenhum tipo marcado
   // nem são consultadas; health_metrics recebe um IN sobre as categorias.
   const filterOf = (s: SourceDef): string | undefined => {
     const conds: string[] = []
     if (createdFilter) conds.push(createdFilter)
+    if (userFilter) conds.push(userFilter)
     // Nenhum tipo marcado = sem filtro de tipos: consultar todas as fontes.
     if (kinds.length === 0) return conds.length > 0 ? conds.join(' && ') : undefined
     const wanted = kinds.filter((k) => s.kinds.includes(k))
@@ -207,13 +223,13 @@ export async function fetchClientFeed({
     if (res.value.items.length >= perSource) exhausted = false
     const source = SOURCES[i]
     for (const rec of res.value.items) {
-      const clientId = str(rec.user)
-      const clientName = names.get(clientId)
+      const recClientId = str(rec.user)
+      const clientName = names.get(recClientId)
       if (!clientName) continue
       const mapped = source.map(rec)
       events.push({
         id: `${source.collection}:${rec.id}`,
-        clientId,
+        clientId: recClientId,
         clientName,
         at: parseCreated(str(rec.created)),
         ...mapped,

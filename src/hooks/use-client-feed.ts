@@ -22,6 +22,7 @@ export function useClientFeed(
   since?: Date | null,
   pollMs: number = FEED_POLL_MS,
   kinds: string[] = [],
+  clientId?: string,
 ) {
   const [events, setEvents] = useState<ClientFeedEvent[]>([])
   const [exhausted, setExhausted] = useState(false)
@@ -37,7 +38,7 @@ export function useClientFeed(
 
     const load = async () => {
       try {
-        const res = await fetchClientFeed({ perSource, since: sinceDate, kinds })
+        const res = await fetchClientFeed({ perSource, since: sinceDate, kinds, clientId })
         if (!active) return
         setEvents(res.events)
         setExhausted(res.exhausted)
@@ -57,7 +58,7 @@ export function useClientFeed(
       window.clearInterval(id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perSource, pollMs, key, kindsKey])
+  }, [perSource, pollMs, key, kindsKey, clientId])
 
   return { events, exhausted, loading, error }
 }

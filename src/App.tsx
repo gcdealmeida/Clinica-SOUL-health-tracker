@@ -23,6 +23,7 @@ import RecordsPage from '@/pages/Records'
 import SourcesPage from '@/pages/Sources'
 import ProfessionalDashboardPage from '@/pages/ProfessionalDashboard'
 import ProfessionalFeedPage from '@/pages/ProfessionalFeed'
+import ProfessionalPatientPage from '@/pages/ProfessionalPatient'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
@@ -57,6 +58,10 @@ export default function App() {
             <Route element={<ProtectedRoute requiredRole="profissional" />}>
               <Route path="/profissional" element={<ProfessionalDashboardPage />} />
               <Route path="/profissional/feed" element={<ProfessionalFeedPage />} />
+              <Route
+                path="/profissional/paciente/:patientId"
+                element={<ProfessionalPatientPage />}
+              />
             </Route>
 
             {/* 404 */}
