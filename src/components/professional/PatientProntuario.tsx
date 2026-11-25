@@ -255,32 +255,35 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
 
       {/* Abas com a evolução de saúde do paciente */}
       <Tabs defaultValue="medidas" className="w-full">
-        <TabsList className="grid grid-cols-5 max-w-2xl">
-          <TabsTrigger value="medidas" className="text-xs">
+        {/* Lista com rolagem horizontal: 9 abas não cabem em uma linha em janelas
+            comuns e o grid fixo estourava a altura do TabsList (h-10), sobrepondo
+            o conteúdo — por isso flex + overflow-x-auto com gatilhos shrink-0. */}
+        <TabsList className="flex h-10 w-full max-w-full items-center justify-start gap-1 overflow-x-auto">
+          <TabsTrigger value="medidas" className="text-xs shrink-0">
             Medidas ({clientMetrics.length})
           </TabsTrigger>
-          <TabsTrigger value="medicacoes" className="text-xs">
+          <TabsTrigger value="medicacoes" className="text-xs shrink-0">
             Medicações ({clientMeds.length})
           </TabsTrigger>
-          <TabsTrigger value="sintomas" className="text-xs">
+          <TabsTrigger value="sintomas" className="text-xs shrink-0">
             Sintomas
           </TabsTrigger>
-          <TabsTrigger value="emocional" className="text-xs">
+          <TabsTrigger value="emocional" className="text-xs shrink-0">
             Emocional 360º
           </TabsTrigger>
-          <TabsTrigger value="exames" className="text-xs">
+          <TabsTrigger value="exames" className="text-xs shrink-0">
             Exames ({clientExams.length})
           </TabsTrigger>
-          <TabsTrigger value="refeicoes" className="text-xs">
+          <TabsTrigger value="refeicoes" className="text-xs shrink-0">
             Refeições ({clientMeals.length})
           </TabsTrigger>
-          <TabsTrigger value="biomarcadores" className="text-xs">
+          <TabsTrigger value="biomarcadores" className="text-xs shrink-0">
             Biomarcadores ({clientBiomarkers.length})
           </TabsTrigger>
-          <TabsTrigger value="dietas" className="text-xs">
+          <TabsTrigger value="dietas" className="text-xs shrink-0">
             Dietas ({clientDiets.length})
           </TabsTrigger>
-          <TabsTrigger value="score" className="text-xs">
+          <TabsTrigger value="score" className="text-xs shrink-0">
             Score Geral
           </TabsTrigger>
         </TabsList>
@@ -310,95 +313,115 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
         </TabsContent>
 
         {/* ABA EXAMES */}
-        <TabsContent value="exames" className="space-y-3 mt-4">
-          <h3 className="text-sm font-semibold text-foreground">Exames Anexados ao Prontuário</h3>
-          {clientExams.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {clientExams.map((ex) => (
-                <Card key={ex.id} className="border-border/60">
-                  <CardHeader className="p-3 pb-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-foreground">{ex.title}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {ex.status || 'Normal'}
-                      </Badge>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">
-                      {ex.type} • {ex.date} {ex.laboratory ? `• ${ex.laboratory}` : ''}
-                    </span>
-                  </CardHeader>
-                  <CardContent className="p-3 pt-1 space-y-1.5 text-xs">
-                    {ex.summary_results && (
-                      <p className="bg-muted/40 p-2 rounded text-[11px] font-mono leading-relaxed">
-                        {ex.summary_results}
-                      </p>
-                    )}
-                    {ex.file && (
-                      <a
-                        href={ex.file}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-emerald-600 text-[11px] underline block"
-                      >
-                        Abrir Laudo Completo
-                      </a>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
-              {loadingClientData ? 'Carregando exames...' : 'Nenhum exame cadastrado.'}
-            </div>
-          )}
+        <TabsContent value="exames" className="mt-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-display text-base text-foreground">
+                Exames Anexados ao Prontuário
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Laudos e resultados anexados pelo paciente · somente leitura
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {clientExams.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {clientExams.map((ex) => (
+                    <Card key={ex.id} className="border-border/60">
+                      <CardHeader className="p-3 pb-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-foreground">{ex.title}</span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {ex.status || 'Normal'}
+                          </Badge>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">
+                          {ex.type} • {ex.date} {ex.laboratory ? `• ${ex.laboratory}` : ''}
+                        </span>
+                      </CardHeader>
+                      <CardContent className="p-3 pt-1 space-y-1.5 text-xs">
+                        {ex.summary_results && (
+                          <p className="bg-muted/40 p-2 rounded text-[11px] font-mono leading-relaxed">
+                            {ex.summary_results}
+                          </p>
+                        )}
+                        {ex.file && (
+                          <a
+                            href={ex.file}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-emerald-600 text-[11px] underline block"
+                          >
+                            Abrir Laudo Completo
+                          </a>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
+                  {loadingClientData ? 'Carregando exames...' : 'Nenhum exame cadastrado.'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ABA REFEIÇÕES */}
-        <TabsContent value="refeicoes" className="space-y-3 mt-4">
-          <h3 className="text-sm font-semibold text-foreground">
-            Fotos de Pratos & Estimativa de Calorias (IA)
-          </h3>
-          {clientMeals.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {clientMeals.map((meal) => (
-                <div key={meal.id} className="border rounded-xl p-3 bg-card space-y-2 text-xs">
-                  {meal.photo || meal.photo_url ? (
-                    <img
-                      src={meal.photo || meal.photo_url}
-                      alt={`Foto da refeição ${meal.title || ''}`.trim()}
-                      width={320}
-                      height={128}
-                      className="h-32 w-full object-cover rounded-lg"
-                    />
-                  ) : null}
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-foreground">
-                      {meal.title || 'Refeição'}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">{meal.date_time}</span>
-                  </div>
-                  {meal.items_detected && (
-                    <p className="text-[11px] text-muted-foreground bg-muted/30 p-1.5 rounded">
-                      {meal.items_detected}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 text-[10px]">
-                    {meal.estimated_weight_g && (
-                      <Badge variant="secondary">⚖️ {meal.estimated_weight_g}g</Badge>
-                    )}
-                    {meal.estimated_calories && (
-                      <Badge variant="outline">🔥 {meal.estimated_calories} kcal</Badge>
-                    )}
-                  </div>
+        <TabsContent value="refeicoes" className="mt-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="font-display text-base text-foreground">
+                Fotos de Pratos &amp; Estimativa de Calorias (IA)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Refeições fotografadas pelo paciente com análise automática · somente leitura
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {clientMeals.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {clientMeals.map((meal) => (
+                    <div key={meal.id} className="border rounded-xl p-3 bg-card space-y-2 text-xs">
+                      {meal.photo || meal.photo_url ? (
+                        <img
+                          src={meal.photo || meal.photo_url}
+                          alt={`Foto da refeição ${meal.title || ''}`.trim()}
+                          width={320}
+                          height={128}
+                          className="h-32 w-full object-cover rounded-lg"
+                        />
+                      ) : null}
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-foreground">
+                          {meal.title || 'Refeição'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{meal.date_time}</span>
+                      </div>
+                      {meal.items_detected && (
+                        <p className="text-[11px] text-muted-foreground bg-muted/30 p-1.5 rounded">
+                          {meal.items_detected}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 text-[10px]">
+                        {meal.estimated_weight_g && (
+                          <Badge variant="secondary">⚖️ {meal.estimated_weight_g}g</Badge>
+                        )}
+                        {meal.estimated_calories && (
+                          <Badge variant="outline">🔥 {meal.estimated_calories} kcal</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
-              {loadingClientData ? 'Carregando refeições...' : 'Nenhuma refeição registrada.'}
-            </div>
-          )}
+              ) : (
+                <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
+                  {loadingClientData ? 'Carregando refeições...' : 'Nenhuma refeição registrada.'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ABA BIOMARCADORES */}
@@ -407,91 +430,99 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
         </TabsContent>
 
         {/* ABA DIETAS */}
-        <TabsContent value="dietas" className="space-y-3 mt-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
-              Dietas & Prescrições do Paciente
-            </h3>
-            <Button
-              size="sm"
-              onClick={() => setShowAddDiet(!showAddDiet)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-xs"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              {showAddDiet ? 'Fechar' : 'Prescrever Dieta'}
-            </Button>
-          </div>
-
-          {showAddDiet && (
-            <Card className="border-emerald-200 bg-emerald-50/20 p-4 space-y-3">
-              <form onSubmit={handlePrescribeDiet} className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Título da Prescrição</Label>
-                  <Input
-                    placeholder="Ex: Protocolo de Otimização Mitocondrial"
-                    value={dietTitle}
-                    onChange={(e) => setDietTitle(e.target.value)}
-                    className="text-xs"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Objetivo Clínico</Label>
-                  <Input
-                    placeholder="Ex: Redução da esteatose hepática e melhora de energia"
-                    value={dietObjective}
-                    onChange={(e) => setDietObjective(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Instruções / Cardápio Prescrito</Label>
-                  <textarea
-                    rows={4}
-                    placeholder="Orientações de café, almoço, jantar, suplementação..."
-                    value={dietPrescription}
-                    onChange={(e) => setDietPrescription(e.target.value)}
-                    className="w-full text-xs rounded-md border p-2"
-                    required
-                  />
-                </div>
-                <Button type="submit" size="sm" className="bg-emerald-600 text-xs">
-                  Gravar Prescrição no Prontuário
-                </Button>
-              </form>
-            </Card>
-          )}
-
-          {clientDiets.length > 0 ? (
-            <div className="space-y-3">
-              {clientDiets.map((d) => (
-                <div key={d.id} className="p-3 rounded-lg border bg-card space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm text-foreground">{d.title}</span>
-                    {d.active && (
-                      <Badge className="bg-emerald-600 text-white text-[10px]">Ativa</Badge>
-                    )}
-                  </div>
-                  {d.objective && (
-                    <p className="text-[11px] text-muted-foreground italic">
-                      Objetivo: {d.objective}
-                    </p>
-                  )}
-                  {d.prescription && (
-                    <div className="bg-muted/40 p-2.5 rounded text-[11px] whitespace-pre-line leading-relaxed">
-                      {d.prescription}
+        <TabsContent value="dietas" className="mt-4">
+          <Card className="border-border/60">
+            <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle className="font-display text-base text-foreground">
+                  Dietas &amp; Prescrições do Paciente
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Protocolos nutricionais prescritos pela clínica
+                </CardDescription>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowAddDiet(!showAddDiet)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-xs shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                {showAddDiet ? 'Fechar' : 'Prescrever Dieta'}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {showAddDiet && (
+                <Card className="border-emerald-200 bg-emerald-50/20 p-4 space-y-3">
+                  <form onSubmit={handlePrescribeDiet} className="space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Título da Prescrição</Label>
+                      <Input
+                        placeholder="Ex: Protocolo de Otimização Mitocondrial"
+                        value={dietTitle}
+                        onChange={(e) => setDietTitle(e.target.value)}
+                        className="text-xs"
+                        required
+                      />
                     </div>
-                  )}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Objetivo Clínico</Label>
+                      <Input
+                        placeholder="Ex: Redução da esteatose hepática e melhora de energia"
+                        value={dietObjective}
+                        onChange={(e) => setDietObjective(e.target.value)}
+                        className="text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Instruções / Cardápio Prescrito</Label>
+                      <textarea
+                        rows={4}
+                        placeholder="Orientações de café, almoço, jantar, suplementação..."
+                        value={dietPrescription}
+                        onChange={(e) => setDietPrescription(e.target.value)}
+                        className="w-full text-xs rounded-md border p-2"
+                        required
+                      />
+                    </div>
+                    <Button type="submit" size="sm" className="bg-emerald-600 text-xs">
+                      Gravar Prescrição no Prontuário
+                    </Button>
+                  </form>
+                </Card>
+              )}
+
+              {clientDiets.length > 0 ? (
+                <div className="space-y-3">
+                  {clientDiets.map((d) => (
+                    <div key={d.id} className="p-3 rounded-lg border bg-card space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-sm text-foreground">{d.title}</span>
+                        {d.active && (
+                          <Badge className="bg-emerald-600 text-white text-[10px]">Ativa</Badge>
+                        )}
+                      </div>
+                      {d.objective && (
+                        <p className="text-[11px] text-muted-foreground italic">
+                          Objetivo: {d.objective}
+                        </p>
+                      )}
+                      {d.prescription && (
+                        <div className="bg-muted/40 p-2.5 rounded text-[11px] whitespace-pre-line leading-relaxed">
+                          {d.prescription}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
-              {loadingClientData
-                ? 'Carregando dietas...'
-                : 'Nenhuma dieta cadastrada para este paciente.'}
-            </div>
-          )}
+              ) : (
+                <div className="text-center py-8 text-xs text-muted-foreground border rounded-lg">
+                  {loadingClientData
+                    ? 'Carregando dietas...'
+                    : 'Nenhuma dieta cadastrada para este paciente.'}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ABA SCORE GERAL */}
