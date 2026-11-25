@@ -155,6 +155,7 @@ export interface FetchClientFeedOptions {
  * Busca os últimos `perSource` registros de cada coleção criados desde `since`,
  * junta tudo e ordena do mais recente para o mais antigo. Só entram registros
  * de clientes conhecidos.
+ * `kinds` vazio = todos os tipos (nenhuma restrição aplicada).
  */
 export async function fetchClientFeed({
   perSource,
@@ -171,6 +172,8 @@ export async function fetchClientFeed({
   const filterOf = (s: SourceDef): string | undefined => {
     const conds: string[] = []
     if (createdFilter) conds.push(createdFilter)
+    // Nenhum tipo marcado = sem filtro de tipos: consultar todas as fontes.
+    if (kinds.length === 0) return conds.length > 0 ? conds.join(' && ') : undefined
     const wanted = kinds.filter((k) => s.kinds.includes(k))
     if (wanted.length === 0) return 'id=""' // fonte fora do filtro: nada a buscar
     if (s.kindField && s.kindPrefix && wanted.length < s.kinds.length) {
