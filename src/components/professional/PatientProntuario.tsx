@@ -23,7 +23,7 @@ import {
   ScoreGeralTab,
   PatientBiomarkerRow,
 } from './PatientExtendedTabs'
-import { PatientMedidasTab } from './PatientMedidasTab'
+import { PatientMedidasDataCards } from './PatientMedidasDataCards'
 
 interface PatientProntuarioProps {
   client: User
@@ -67,7 +67,7 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
       setLoadingClientData(true)
       setPatientAiInsights(null)
       const [m, ex, d, meals, emo, med, meds, bioms] = await Promise.all([
-        healthService.listUserMetrics(clientId, 50),
+        healthService.listUserMetrics(clientId, 300),
         medicalService.listExams(clientId),
         medicalService.listDiets(clientId),
         mealService.listMeals(clientId),
@@ -303,11 +303,11 @@ export function PatientProntuario({ client }: PatientProntuarioProps) {
           <EmocionalTab logs={clientEmotional} />
         </TabsContent>
 
-        {/* ABA MEDIDAS — modelo visual completo do app do cliente (somente leitura) */}
+        {/* ABA MEDIDAS — cards de dados (últimos valores + datas, sem gráficos) */}
         <TabsContent value="medidas" className="mt-4">
-          <PatientMedidasTab
-            clientId={client.id}
+          <PatientMedidasDataCards
             metrics={clientMetrics}
+            meds={clientMeds}
             loading={loadingClientData}
           />
         </TabsContent>
