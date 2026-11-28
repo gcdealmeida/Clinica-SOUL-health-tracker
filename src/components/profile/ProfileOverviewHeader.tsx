@@ -37,7 +37,7 @@ interface ProfileOverviewHeaderProps {
   refreshing: boolean
   onRefresh: () => void
   onOpenBasicInfo: () => void
-  onOpenEmotionalDiary: () => void
+  onOpenEmotional: () => void
 }
 
 export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
@@ -49,7 +49,7 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
   refreshing,
   onRefresh,
   onOpenBasicInfo,
-  onOpenEmotionalDiary,
+  onOpenEmotional,
 }) => {
   const { name, email, age, gender, weightKg, heightCm, bodyFatPct, leanMassKg, bloodType } =
     initialData
@@ -169,7 +169,7 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
             preventiveScore={preventiveScore}
             emotionalScore={emotionalScore}
             onOpenPreventive={onOpenBasicInfo}
-            onOpenEmotionalDiary={onOpenEmotionalDiary}
+            onOpenEmotional={onOpenEmotional}
           />
 
           {/* Grid com os 8 Dados Iniciais no Estilo Guava */}

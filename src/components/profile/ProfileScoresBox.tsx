@@ -75,7 +75,7 @@ export interface ProfileScoresBoxProps {
   emotionalScore: EmotionalScoreSummary
   loading?: boolean
   onOpenPreventive: () => void
-  onOpenEmotionalDiary: () => void
+  onOpenEmotional: () => void
 }
 
 export const ProfileScoresBox: React.FC<ProfileScoresBoxProps> = ({
@@ -84,7 +84,7 @@ export const ProfileScoresBox: React.FC<ProfileScoresBoxProps> = ({
   emotionalScore,
   loading,
   onOpenPreventive,
-  onOpenEmotionalDiary,
+  onOpenEmotional,
 }) => {
   // ---- Score Geral (principal, 0–100) ----
   const geralVal = geralTotal
@@ -194,7 +194,8 @@ export const ProfileScoresBox: React.FC<ProfileScoresBoxProps> = ({
 
             <button
               type="button"
-              onClick={onOpenEmotionalDiary}
+              onClick={onOpenEmotional}
+              aria-label="Abrir painel do Score Emocional"
               className="group flex items-center gap-3.5 rounded-xl border border-soul-copper/30 dark:border-soul-copper/40 bg-gradient-to-br from-soul-copper/10 via-card/90 to-background dark:from-soul-copper/15 dark:via-card dark:to-background p-3 text-left shadow-xs hover:shadow-md hover:border-soul-copper/50 focus-visible:ring-2 focus-visible:ring-soul-gold-deep dark:focus-visible:ring-soul-gold-light focus-visible:outline-none transition-all duration-200 motion-reduce:transition-none"
             >
               <Ring

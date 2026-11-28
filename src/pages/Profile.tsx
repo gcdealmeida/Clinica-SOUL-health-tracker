@@ -25,6 +25,7 @@ import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/p
 import { computeScoreGeral } from '@/components/professional/PatientExtendedTabs'
 
 import { PreventiveScoreCard } from '@/components/profile/PreventiveScoreCard'
+import { EmotionalScorePanel } from '@/components/profile/EmotionalScorePanel'
 import {
   ProfileOverviewHeader,
   InitialProfileData,
@@ -305,6 +306,15 @@ export const ProfilePage: React.FC = () => {
     navigate('/diario-emocional')
   }
 
+  // Abre o painel próprio do Score Emocional — mesmo padrão do clique no Score Preventivo
+  const handleOpenEmotionalScore = () => {
+    setActiveTab('basic')
+    const el = document.getElementById('emotional-score-anchor')
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   // Handlers para Biomarcadores
   const handleAddBiomarker = async (
     item: Omit<ProfileBiomarker, 'id' | 'user' | 'created' | 'updated'>,
@@ -420,7 +430,7 @@ export const ProfilePage: React.FC = () => {
           refreshing={refreshing}
           onRefresh={() => loadAllData(true)}
           onOpenBasicInfo={handleOpenBasicInfo}
-          onOpenEmotionalDiary={handleOpenEmotionalDiary}
+          onOpenEmotional={handleOpenEmotionalScore}
         />
 
         {/* Navegação horizontal de abas das 10 seções */}
@@ -468,6 +478,13 @@ export const ProfilePage: React.FC = () => {
                   exams={exams}
                   vaccinations={vaccinations}
                   lifestyle={lifestyle}
+                />
+
+                {/* Painel próprio do Score Emocional — mesmo padrão do Preventivo */}
+                <EmotionalScorePanel
+                  emotionalLogs={emotionalLogs}
+                  score={emotionalScoreResult}
+                  onOpenDiary={handleOpenEmotionalDiary}
                 />
               </div>
             )}
