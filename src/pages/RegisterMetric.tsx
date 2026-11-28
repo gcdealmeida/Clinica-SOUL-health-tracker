@@ -32,6 +32,12 @@ import {
   Flame,
   Info,
 } from 'lucide-react'
+import { SymptomScale } from '@/components/register/SymptomScale'
+import {
+  SymptomPreset,
+  fetchTopSymptomPresets,
+  DEFAULT_SYMPTOM_PRESETS,
+} from '@/hooks/use-symptom-presets'
 
 export interface QuickOption {
   label: string
@@ -661,6 +667,31 @@ export default function RegisterMetricPage() {
   const [history, setHistory] = useState<HealthMetric[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
 
+  // Opções pré-prontas personalizadas: os 5 sintomas mais registrados pelo cliente.
+  // Cai para as opções padrão (máx. 5) quando ele ainda não tem histórico de sintomas.
+  const [symptomPresets, setSymptomPresets] = useState<SymptomPreset[]>([])
+  const [presetsLoaded, setPresetsLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setPresetsLoaded(false)
+    fetchTopSymptomPresets(5)
+      .then((presets) => {
+        if (cancelled) return
+        setSymptomPresets(presets.length > 0 ? presets : DEFAULT_SYMPTOM_PRESETS)
+      })
+      .catch((err) => {
+        console.error('Erro ao carregar sintomas frequentes:', err)
+        if (!cancelled) setSymptomPresets(DEFAULT_SYMPTOM_PRESETS)
+      })
+      .finally(() => {
+        if (!cancelled) setPresetsLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   const currentDef =
     CATEGORY_DEFINITIONS.find((c) => c.id === selectedCategory) || CATEGORY_DEFINITIONS[0]
 
@@ -706,6 +737,9 @@ export default function RegisterMetricPage() {
   const handleApplyPreset = (preset: QuickOption) => {
     if (preset.numericValue !== undefined) {
       setNumericValue(String(preset.numericValue))
+      if (selectedCategory === 'sintoma') {
+        setSeverity(String(preset.numericValue))
+      }
     }
     if (preset.textValue !== undefined) {
       setTextValue(preset.textValue)
@@ -713,10 +747,16 @@ export default function RegisterMetricPage() {
     if (preset.notes) {
       setNotes((prev) => (prev ? `${prev} • ${preset.notes}` : (preset.notes ?? '')))
     }
-    if (selectedCategory === 'sintoma' && preset.numericValue !== undefined) {
-      setSeverity(String(preset.numericValue))
-    }
     toast.info(`Opção "${preset.label}" selecionada`, { duration: 1800 })
+  }
+
+  const handleApplySymptomPreset = (preset: SymptomPreset) => {
+    setTextValue(preset.textValue)
+    setSeverity(String(preset.severity))
+    setNotes(preset.notes ?? '')
+    toast.info(`"${preset.label}" preenchido — ajuste a severidade abaixo`, {
+      duration: 2200,
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -938,25 +978,50 @@ export default function RegisterMetricPage() {
                       <span className="text-[10px] text-muted-foreground">Clique para aplicar</span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {currentDef.quickPresets.map((preset, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleApplyPreset(preset)}
-                          className="flex flex-col items-start p-2.5 rounded-lg border bg-card hover:bg-muted/60 text-left transition-all hover:scale-101 border-border/80"
-                        >
-                          <span className="text-xs font-semibold text-foreground leading-tight">
-                            {preset.label}
-                          </span>
-                          {preset.sublabel && (
+                    {currentDef.id === 'sintoma' && symptomPresets.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {symptomPresets.map((preset, idx) => (
+                          <button
+                            key={`${preset.textValue}-${idx}`}
+                            type="button"
+                            onClick={() => handleApplySymptomPreset(preset)}
+                            className="flex flex-col items-start p-2.5 rounded-lg border bg-card hover:bg-muted/60 text-left transition-all hover:scale-101 border-border/80"
+                          >
+                            <span className="text-xs font-semibold text-foreground leading-tight">
+                              {preset.label}
+                            </span>
                             <span className="text-[10px] text-muted-foreground mt-0.5">
                               {preset.sublabel}
                             </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : currentDef.quickPresets && currentDef.quickPresets.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {currentDef.quickPresets.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleApplyPreset(preset)}
+                            className="flex flex-col items-start p-2.5 rounded-lg border bg-card hover:bg-muted/60 text-left transition-all hover:scale-101 border-border/80"
+                          >
+                            <span className="text-xs font-semibold text-foreground leading-tight">
+                              {preset.label}
+                            </span>
+                            {preset.sublabel && (
+                              <span className="text-[10px] text-muted-foreground mt-0.5">
+                                {preset.sublabel}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {currentDef.id === 'sintoma' && !presetsLoaded && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Carregando seus sintomas mais frequentes...
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -999,30 +1064,7 @@ export default function RegisterMetricPage() {
                         />
                       </div>
 
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs font-semibold text-foreground">
-                            Escala de Severidade / Intensidade
-                          </Label>
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                            {severity || '5'}/10
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={10}
-                          step={1}
-                          value={severity}
-                          onChange={(e) => setSeverity(e.target.value)}
-                          className="w-full accent-amber-600 h-2 bg-muted rounded-lg cursor-pointer"
-                        />
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span>0 - Imperceptível</span>
-                          <span>5 - Moderado</span>
-                          <span>10 - Intenso / Intolerável</span>
-                        </div>
-                      </div>
+                      <SymptomScale severity={severity} onChange={setSeverity} />
                     </div>
                   ) : currentDef.id === 'pressao' ? (
                     <div className="space-y-2">
@@ -1234,19 +1276,38 @@ export default function RegisterMetricPage() {
                   </div>
                 )}
 
+                {/* 3.1 ESCALA EM DESTAQUE: para sintoma, a escala já vem acima (campo 3.2)
+                    e as Observações ficam LOGO ABAIXO dela, como pediu o usuário. */}
+                {currentDef.id === 'sintoma' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="metric-notes" className="text-xs font-semibold text-foreground">
+                      Observações Clínicas & Contexto
+                    </Label>
+                    <Input
+                      id="metric-notes"
+                      placeholder="Ex: em repouso matinal, antes do treino, após refeição, sono reparador..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
+                )}
+
                 {/* 4. CAMPO OBSERVAÇÕES OBRIGATÓRIO NA ESTRUTURA (preenchimento opcional pelo usuário) */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="metric-notes" className="text-xs font-semibold text-foreground">
-                    Observações Clínicas & Contexto
-                  </Label>
-                  <Input
-                    id="metric-notes"
-                    placeholder="Ex: em repouso matinal, antes do treino, após refeição, sono reparador..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="text-xs"
-                  />
-                </div>
+                {currentDef.id !== 'sintoma' && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="metric-notes" className="text-xs font-semibold text-foreground">
+                      Observações Clínicas & Contexto
+                    </Label>
+                    <Input
+                      id="metric-notes"
+                      placeholder="Ex: em repouso matinal, antes do treino, após refeição, sono reparador..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="text-xs"
+                    />
+                  </div>
+                )}
 
                 {/* Upload foto do relógio / arquivo */}
                 <div className="space-y-1.5">
