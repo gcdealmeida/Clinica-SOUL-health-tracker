@@ -24,16 +24,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import {
-  Lightbulb,
-  Database,
-  GitCompareArrows,
-  TrendingUp,
-  Sparkles,
-  Info,
-  Loader2,
-  FileText,
-} from 'lucide-react'
+import { Lightbulb, GitCompareArrows, Sparkles, Loader2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { aiAnalysisService } from '@/services/mealsAndAi'
 import type { HealthMetric, EmotionalLog } from '@/types'
@@ -95,7 +86,7 @@ const METRIC_CATEGORY_TO_VAR: Record<string, VariableId> = {
 }
 
 const AVAILABILITY_NOTE =
-  'Correlação medida pelo coeficiente de Pearson (−1 a +1) sobre os dias em que as duas variáveis têm registro. Correlação NÃO é causalidade: um padrão estatístico não prova que uma variável causa a outra.'
+  'Correlação não é causalidade: mostra um padrão, não prova que uma coisa causa a outra.'
 
 // ---------- Cálculo estatístico ----------
 
@@ -353,71 +344,15 @@ export default function InsightsPage() {
             <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
               Insights
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Descubra correlações, tendências e padrões ocultos sobre a sua saúde
-            </p>
+            <p className="text-xs text-muted-foreground">Correlações e padrões da sua saúde</p>
           </div>
         </div>
 
-        {/* Seção explicativa — texto do usuário */}
+        {/* Seção explicativa — resumida */}
         <Card className="border-emerald-200 dark:border-emerald-900 bg-gradient-to-br from-emerald-50/60 via-card to-teal-50/40 dark:from-emerald-950/20 dark:to-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-emerald-600" />
-              O que esta página faz
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-xs text-foreground/90 leading-relaxed">
-            <p>
-              Ajudar você — especialmente se convive com condições médicas complexas ou crônicas — a
-              descobrir correlações, tendências e padrões ocultos sobre a própria saúde ao longo do
-              tempo, cruzando dados de diferentes áreas.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <div className="rounded-xl border bg-card p-3 space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <Database className="h-3.5 w-3.5 text-emerald-600" />
-                  1. Centralização de Dados
-                </div>
-                <p className="text-muted-foreground">
-                  Sintomas diários e intensidade de dores; humor, energia e saúde mental;
-                  medicamentos; sono, alimentação, atividade física, ciclo menstrual e clima.
-                </p>
-              </div>
-              <div className="rounded-xl border bg-card p-3 space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <GitCompareArrows className="h-3.5 w-3.5 text-emerald-600" />
-                  2. Cruzamento de Informações via Algoritmos
-                </div>
-                <p className="text-muted-foreground">
-                  Ex.: pico de dor após noites de sono ruins; sintoma diminui quando você toma a
-                  medicação corretamente.
-                </p>
-              </div>
-              <div className="rounded-xl border bg-card p-3 space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
-                  3. Geração de Tendências Visuais
-                </div>
-                <p className="text-muted-foreground">
-                  Gráficos e relatórios que revelam gatilhos e a eficácia de tratamentos — responder
-                  perguntas como "Será que o meu cansaço está associado à queda de temperatura?" ou
-                  "Esse novo remédio realmente reduziu minhas crises no último mês?".
-                </p>
-              </div>
-            </div>
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-3 flex items-start gap-2">
-              <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-emerald-900 dark:text-emerald-200">
-                <b>Além disso, com IA:</b> resumir anotações médicas complexas e traduzir termos
-                difíceis, permitindo entender exames de forma simples e levar relatórios claros às
-                consultas — veja a seção{' '}
-                <Link to="/exames-dietas" className="underline font-semibold">
-                  Entenda seus exames
-                </Link>{' '}
-                abaixo.
-              </p>
-            </div>
+          <CardContent className="py-4 text-xs text-foreground/90 leading-relaxed flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" aria-hidden="true" />
+            <p>Cruze seus dados para descobrir padrões sobre a sua saúde ao longo do tempo.</p>
           </CardContent>
         </Card>
 
@@ -429,8 +364,7 @@ export default function InsightsPage() {
               Correlações
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Escolha 2 variáveis dos seus dados reais e um período: o app calcula a correlação
-              estatística (Pearson, séries diárias alinhadas por dia) e mostra o gráfico.
+              Escolha 2 variáveis e um período para ver a correlação entre elas.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -442,19 +376,18 @@ export default function InsightsPage() {
             ) : availableVars.length < 2 ? (
               <div className="rounded-xl border border-dashed p-4 bg-muted/20 text-xs text-muted-foreground space-y-2">
                 <p>
-                  Você ainda não tem registros suficientes em pelo menos duas variáveis neste
-                  período. Registre métricas em{' '}
+                  Registre dados em duas variáveis em{' '}
                   <Link to="/registrar" className="text-emerald-600 font-semibold hover:underline">
                     Registrar
                   </Link>{' '}
-                  ou faça check-ins no{' '}
+                  ou no{' '}
                   <Link
                     to="/diario-emocional"
                     className="text-emerald-600 font-semibold hover:underline"
                   >
                     Diário Emocional
                   </Link>{' '}
-                  para desbloquear os cruzamentos.
+                  para liberar os cruzamentos.
                 </p>
               </div>
             ) : (
@@ -668,9 +601,7 @@ export default function InsightsPage() {
                         </Button>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Envia os resumos das séries escolhidas ao assistente da Clínica Soul, que
-                        devolve uma interpretação em português dos cruzamentos — sempre com o aviso
-                        de que correlação não é causalidade.
+                        A IA da Clínica interpreta o cruzamento escolhido.
                       </p>
                       {aiLoading && <Skeleton className="h-20 w-full" />}
                       {aiText && !aiLoading && (
@@ -697,17 +628,11 @@ export default function InsightsPage() {
               <FileText className="h-4 w-4 text-emerald-600" />
               Entenda seus exames
             </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              IA para resumir anotações médicas complexas e traduzir termos difíceis — entenda seus
-              exames de forma simples e leve relatórios claros às consultas.
-            </p>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-dashed p-3 bg-muted/20">
               <p className="text-xs text-muted-foreground">
-                A leitura por IA dos seus exames (PDF ou foto) acontece na página Exames & Dietas —
-                os resumos em linguagem simples ficam salvos lá e entram na linha do tempo de
-                Records.
+                Leia seus exames com IA em Exames & Dietas.
               </p>
               <Button
                 size="sm"
