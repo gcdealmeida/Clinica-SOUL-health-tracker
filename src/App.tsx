@@ -17,6 +17,7 @@ import EmotionalDiaryPage from '@/pages/EmotionalDiary'
 import AiAnalysesPage from '@/pages/AiAnalyses'
 import MetricDetailPage from '@/pages/MetricDetail'
 import ProfilePage from '@/pages/Profile'
+import { ProfileScorePage } from '@/pages/ProfileScore'
 import BiomarkersPanelPage from '@/pages/BiomarkersPanel'
 import InsightsPage from '@/pages/Insights'
 import RecordsPage from '@/pages/Records'
@@ -41,6 +42,15 @@ export default function App() {
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              {/* Páginas dedicadas dos scores do Profile (só cliente acessa) */}
+              <Route
+                path="/profile/score-preventivo"
+                element={<ProfileScorePage kind="preventivo" />}
+              />
+              <Route
+                path="/profile/score-emocional"
+                element={<ProfileScorePage kind="emocional" />}
+              />
               <Route path="/biomarcadores" element={<BiomarkersPanelPage />} />
               <Route path="/insights" element={<InsightsPage />} />
               <Route path="/records" element={<RecordsPage />} />

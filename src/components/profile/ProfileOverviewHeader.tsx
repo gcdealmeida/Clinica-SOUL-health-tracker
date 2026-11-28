@@ -36,7 +36,7 @@ interface ProfileOverviewHeaderProps {
   avatarInitials: string
   refreshing: boolean
   onRefresh: () => void
-  onOpenBasicInfo: () => void
+  onOpenPreventive: () => void
   onOpenEmotional: () => void
 }
 
@@ -48,7 +48,7 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
   avatarInitials,
   refreshing,
   onRefresh,
-  onOpenBasicInfo,
+  onOpenPreventive,
   onOpenEmotional,
 }) => {
   const { name, email, age, gender, weightKg, heightCm, bodyFatPct, leanMassKg, bloodType } =
@@ -168,7 +168,7 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
             geralTotal={geralTotal}
             preventiveScore={preventiveScore}
             emotionalScore={emotionalScore}
-            onOpenPreventive={onOpenBasicInfo}
+            onOpenPreventive={onOpenPreventive}
             onOpenEmotional={onOpenEmotional}
           />
 

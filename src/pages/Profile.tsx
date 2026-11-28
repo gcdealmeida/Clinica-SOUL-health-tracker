@@ -293,26 +293,18 @@ export const ProfilePage: React.FC = () => {
     }
   }, [basicProfile, user, age, latestBodyMetrics])
 
-  const handleOpenBasicInfo = () => {
-    setActiveTab('basic')
-    // Suave scroll para a seção se necessário
-    const el = document.getElementById('basic-info-anchor')
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+  // Cliques na caixa de scores NAVEGAM para páginas dedicadas (não rolam a página)
+  const handleOpenPreventive = () => {
+    navigate('/profile/score-preventivo')
   }
 
   const handleOpenEmotionalDiary = () => {
     navigate('/diario-emocional')
   }
 
-  // Abre o painel próprio do Score Emocional — mesmo padrão do clique no Score Preventivo
+  // Abre a página dedicada do Score Emocional — mesmo padrão do clique no Score Preventivo
   const handleOpenEmotionalScore = () => {
-    setActiveTab('basic')
-    const el = document.getElementById('emotional-score-anchor')
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    navigate('/profile/score-emocional')
   }
 
   // Handlers para Biomarcadores
@@ -429,7 +421,7 @@ export const ProfilePage: React.FC = () => {
           avatarInitials={avatarInitials}
           refreshing={refreshing}
           onRefresh={() => loadAllData(true)}
-          onOpenBasicInfo={handleOpenBasicInfo}
+          onOpenPreventive={handleOpenPreventive}
           onOpenEmotional={handleOpenEmotionalScore}
         />
 
