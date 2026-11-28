@@ -5,7 +5,6 @@ import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -24,18 +23,19 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { Lightbulb, GitCompareArrows, Sparkles, Loader2, FileText } from 'lucide-react'
+import { Lightbulb, GitCompareArrows, Sparkles, Loader2, FileText, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { aiAnalysisService } from '@/services/mealsAndAi'
 import type { HealthMetric, EmotionalLog } from '@/types'
 
 /**
- * Página Insights (estilo Guava).
- * - Seção explicativa com o texto do usuário (as 3 etapas + IA).
- * - Correlações REAIS: escolhe 2+ variáveis dos dados do próprio usuário,
+ * Página Insights (estilo Guava, identidade Clínica Soul).
+ * - Correlações REAIS: escolhe 2 variáveis dos dados do próprio usuário,
  *   calcula Pearson sobre séries diárias alinhadas por dia e plota dispersão.
  * - "Análise com IA": envia resumos das séries ao hook pb_hooks
  *   (POST /backend/v1/ai/analyze-correlations) para interpretação em português.
+ * - Apresentação premium: gradientes dourado-cobre, ícones em círculos e
+ *   botões com elevação — textos curtos de v0.0.116 preservados.
  */
 
 // ---------- Variáveis disponíveis (derivadas dos dados reais) ----------
@@ -88,6 +88,25 @@ const METRIC_CATEGORY_TO_VAR: Record<string, VariableId> = {
 const AVAILABILITY_NOTE =
   'Correlação não é causalidade: mostra um padrão, não prova que uma coisa causa a outra.'
 
+// ---------- Identidade visual (Clínica Soul) ----------
+
+// Botão de ação premium: gradiente dourado-cobre, elevação no hover e
+// texto marrom-profundo da marca (contraste correto sobre o dourado).
+const PREMIUM_BUTTON_CLASS =
+  'border border-soul-gold-light/60 bg-gradient-to-r from-soul-gold-deep via-soul-gold to-soul-copper text-soul-brown-deep font-semibold shadow-md shadow-soul-gold/25 transition-all duration-200 hover:shadow-lg hover:shadow-soul-gold/40 hover:brightness-[1.05] hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:translate-y-0 dark:text-soul-brown-deep'
+
+// Badge circular para ícones das seções (dourado com profundidade)
+const ICON_BADGE_CLASS =
+  'h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-soul-gold-light via-soul-gold to-soul-copper text-soul-brown-deep flex items-center justify-center shadow-md shadow-soul-gold/25'
+
+// Faixa decorativa no topo dos cards (eco do brilho do logo)
+const CARD_TOP_ACCENT_CLASS =
+  'h-1 w-full bg-gradient-to-r from-soul-gold-light via-soul-gold to-soul-copper/80'
+
+// Cores das séries nos gráficos (dourado e cobre da marca)
+const CHART_GOLD = '#B98A44'
+const CHART_COPPER = '#B06A52'
+
 // ---------- Cálculo estatístico ----------
 
 function pearson(xs: number[], ys: number[]): number {
@@ -121,12 +140,12 @@ function strengthLabel(r: number): { label: string; className: string } {
   if (a >= 0.7)
     return {
       label: 'correlação forte',
-      className: 'text-emerald-700 dark:text-emerald-400 font-semibold',
+      className: 'text-soul-gold-deep dark:text-soul-gold-light font-semibold',
     }
   if (a >= 0.4)
     return {
       label: 'correlação moderada',
-      className: 'text-amber-700 dark:text-amber-400 font-semibold',
+      className: 'text-soul-copper dark:text-soul-copper-light font-semibold',
     }
   if (a >= 0.2) return { label: 'correlação fraca', className: 'text-muted-foreground font-medium' }
   return { label: 'praticamente nenhuma correlação', className: 'text-muted-foreground' }
@@ -331,37 +350,49 @@ export default function InsightsPage() {
     }
   }
 
+  const strength = correlation ? strengthLabel(correlation.r) : null
+  const isNeutral = !correlation || Number.isNaN(correlation.r) || Math.abs(correlation.r) < 0.2
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar currentTab="insights" />
       <main className="flex-1 container mx-auto px-4 py-6 max-w-6xl space-y-5">
         {/* Cabeçalho */}
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
-            <Lightbulb className="h-5 w-5" />
+        <div className="flex items-center gap-3">
+          <div className={ICON_BADGE_CLASS}>
+            <Lightbulb className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">
+            <p className="eyebrow">Clínica Soul</p>
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground leading-tight">
               Insights
             </h1>
             <p className="text-xs text-muted-foreground">Correlações e padrões da sua saúde</p>
           </div>
         </div>
 
-        {/* Seção explicativa — resumida */}
-        <Card className="border-emerald-200 dark:border-emerald-900 bg-gradient-to-br from-emerald-50/60 via-card to-teal-50/40 dark:from-emerald-950/20 dark:to-card">
-          <CardContent className="py-4 text-xs text-foreground/90 leading-relaxed flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-600 shrink-0" aria-hidden="true" />
-            <p>Cruze seus dados para descobrir padrões sobre a sua saúde ao longo do tempo.</p>
+        {/* Seção explicativa — resumida (v0.0.116) */}
+        <Card className="overflow-hidden border-soul-gold/30 bg-gradient-to-r from-soul-gold/10 via-card to-soul-copper/5 dark:from-soul-gold/15 dark:to-soul-copper/10 shadow-subtle">
+          <div className={CARD_TOP_ACCENT_CLASS} aria-hidden="true" />
+          <CardContent className="py-3.5 flex items-center gap-3">
+            <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-soul-gold-light to-soul-gold text-soul-brown-deep flex items-center justify-center shadow-sm">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <p className="text-xs text-foreground/90 leading-relaxed">
+              Cruze seus dados para descobrir padrões sobre a sua saúde ao longo do tempo.
+            </p>
           </CardContent>
         </Card>
 
         {/* Correlações */}
-        <Card>
+        <Card className="overflow-hidden border-soul-gold/25 shadow-elevation">
+          <div className={CARD_TOP_ACCENT_CLASS} aria-hidden="true" />
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <GitCompareArrows className="h-4 w-4 text-emerald-600" />
-              Correlações
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-soul-gold-light to-soul-gold text-soul-brown-deep flex items-center justify-center shadow-sm">
+                <GitCompareArrows className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="font-display text-lg sm:text-xl">Correlações</span>
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               Escolha 2 variáveis e um período para ver a correlação entre elas.
@@ -374,16 +405,19 @@ export default function InsightsPage() {
                 <Skeleton className="h-40 w-full" />
               </div>
             ) : availableVars.length < 2 ? (
-              <div className="rounded-xl border border-dashed p-4 bg-muted/20 text-xs text-muted-foreground space-y-2">
+              <div className="rounded-xl border border-dashed border-soul-gold/40 bg-gradient-to-br from-soul-gold/5 to-transparent p-4 bg-muted/20 text-xs text-muted-foreground space-y-2">
                 <p>
                   Registre dados em duas variáveis em{' '}
-                  <Link to="/registrar" className="text-emerald-600 font-semibold hover:underline">
+                  <Link
+                    to="/registrar"
+                    className="text-soul-gold-deep dark:text-soul-gold-light font-semibold hover:underline"
+                  >
                     Registrar
                   </Link>{' '}
                   ou no{' '}
                   <Link
                     to="/diario-emocional"
-                    className="text-emerald-600 font-semibold hover:underline"
+                    className="text-soul-gold-deep dark:text-soul-gold-light font-semibold hover:underline"
                   >
                     Diário Emocional
                   </Link>{' '}
@@ -395,7 +429,7 @@ export default function InsightsPage() {
                 {/* Seletores */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="space-y-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-soul-gold-deep dark:text-soul-gold-light">
                       Variável 1
                     </span>
                     <Select value={selectedA} onValueChange={(v) => selectVar('A', v)}>
@@ -412,7 +446,7 @@ export default function InsightsPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-soul-gold-deep dark:text-soul-gold-light">
                       Variável 2
                     </span>
                     <Select value={selectedB} onValueChange={(v) => selectVar('B', v)}>
@@ -429,7 +463,9 @@ export default function InsightsPage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[11px] font-medium text-muted-foreground">Período</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-soul-gold-deep dark:text-soul-gold-light">
+                      Período
+                    </span>
                     <Select value={periodDays} onValueChange={setPeriodDays}>
                       <SelectTrigger className="h-9 text-xs">
                         <SelectValue />
@@ -450,11 +486,11 @@ export default function InsightsPage() {
                   <div className="space-y-3">
                     <div
                       className={`rounded-xl border p-3 space-y-1.5 ${
-                        Number.isNaN(correlation.r) || Math.abs(correlation.r) < 0.2
+                        isNeutral
                           ? 'border-border bg-muted/20'
                           : correlation.r > 0
-                            ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/20'
-                            : 'border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/20'
+                            ? 'border-soul-gold/40 bg-gradient-to-br from-soul-gold/10 via-card to-transparent dark:from-soul-gold/15'
+                            : 'border-soul-copper/40 bg-gradient-to-br from-soul-copper/10 via-card to-transparent dark:from-soul-copper/15'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -463,7 +499,7 @@ export default function InsightsPage() {
                         </p>
                         <Badge
                           variant="outline"
-                          className="text-[10px] bg-background/70 border-border"
+                          className="text-[10px] bg-background/70 border-soul-gold/40 text-soul-gold-deep dark:text-soul-gold-light"
                         >
                           {correlation.pairs} dias em comum
                         </Badge>
@@ -473,6 +509,9 @@ export default function InsightsPage() {
                           correlation.labelA,
                           correlation.labelB,
                           correlation.r,
+                        )}{' '}
+                        {strength && !isNeutral && (
+                          <span className={strength.className}>({strength.label})</span>
                         )}
                       </p>
                       <p className="text-[10px] text-muted-foreground">{AVAILABILITY_NOTE}</p>
@@ -480,7 +519,7 @@ export default function InsightsPage() {
 
                     {/* Gráfico: linha dupla normalizada + dispersão */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                      <div className="rounded-xl border p-3">
+                      <div className="rounded-xl border border-soul-gold/20 bg-gradient-to-b from-soul-gold/5 to-transparent p-3">
                         <p className="text-[11px] font-semibold text-foreground mb-1">
                           Evolução diária (últimos {periodDays} dias)
                         </p>
@@ -492,7 +531,7 @@ export default function InsightsPage() {
                           <div className="h-56">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={correlation.dualLine}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                                 <XAxis dataKey="day" tick={{ fontSize: 10 }} />
                                 <YAxis tick={{ fontSize: 10 }} />
                                 <ReTooltip
@@ -504,7 +543,7 @@ export default function InsightsPage() {
                                   type="monotone"
                                   dataKey="a"
                                   name={correlation.labelA}
-                                  stroke="#059669"
+                                  stroke={CHART_GOLD}
                                   dot={false}
                                   strokeWidth={2}
                                 />
@@ -512,7 +551,7 @@ export default function InsightsPage() {
                                   type="monotone"
                                   dataKey="b"
                                   name={correlation.labelB}
-                                  stroke="#7c3aed"
+                                  stroke={CHART_COPPER}
                                   dot={false}
                                   strokeWidth={2}
                                 />
@@ -521,7 +560,7 @@ export default function InsightsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="rounded-xl border p-3">
+                      <div className="rounded-xl border border-soul-copper/20 bg-gradient-to-b from-soul-copper/5 to-transparent p-3">
                         <p className="text-[11px] font-semibold text-foreground mb-1">
                           Dispersão ({correlation.labelA} × {correlation.labelB})
                         </p>
@@ -533,7 +572,7 @@ export default function InsightsPage() {
                           <div className="h-56">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={correlation.points}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                                 <XAxis
                                   dataKey="x"
                                   type="number"
@@ -555,8 +594,8 @@ export default function InsightsPage() {
                                   type="monotone"
                                   dataKey="y"
                                   stroke="none"
-                                  fill="#059669"
-                                  dot={{ r: 3, fill: '#059669' }}
+                                  fill={CHART_COPPER}
+                                  dot={{ r: 3, fill: CHART_COPPER }}
                                   isAnimationActive={false}
                                 />
                               </LineChart>
@@ -571,13 +610,15 @@ export default function InsightsPage() {
 
                     {/* Análise com IA */}
                     <div
-                      className="rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50/50 dark:bg-violet-950/20 p-3 space-y-2"
+                      className="rounded-xl border border-soul-gold/35 bg-gradient-to-br from-soul-gold/10 via-card to-soul-copper/5 dark:from-soul-gold/15 dark:to-soul-copper/10 p-3 space-y-2 shadow-subtle"
                       ref={aiAnchorRef}
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          <Sparkles className="h-4 w-4 text-violet-600" />
-                          <span className="text-xs font-semibold text-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-soul-gold-light via-soul-gold to-soul-copper text-soul-brown-deep flex items-center justify-center shadow-sm">
+                            <Sparkles className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                          <span className="text-sm font-semibold font-display text-foreground">
                             Análise com IA
                           </span>
                         </div>
@@ -585,16 +626,19 @@ export default function InsightsPage() {
                           size="sm"
                           disabled={aiLoading || !selectedA || !selectedB}
                           onClick={handleAiAnalysis}
-                          className="h-8 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                          aria-busy={aiLoading}
+                          className={`h-9 px-4 text-xs ${PREMIUM_BUTTON_CLASS} ${
+                            aiLoading ? 'animate-pulse motion-reduce:animate-none' : ''
+                          }`}
                         >
                           {aiLoading ? (
                             <>
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin motion-reduce:animate-none" />
                               Analisando...
                             </>
                           ) : (
                             <>
-                              <Sparkles className="h-3.5 w-3.5 mr-1" />
+                              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                               Analisar cruzamento
                             </>
                           )}
@@ -605,7 +649,7 @@ export default function InsightsPage() {
                       </p>
                       {aiLoading && <Skeleton className="h-20 w-full" />}
                       {aiText && !aiLoading && (
-                        <div className="rounded-lg bg-card border p-3 text-xs whitespace-pre-wrap leading-relaxed text-foreground/90">
+                        <div className="rounded-lg bg-card border border-soul-gold/25 p-3 text-xs whitespace-pre-wrap leading-relaxed text-foreground/90">
                           {aiText}
                         </div>
                       )}
@@ -622,24 +666,33 @@ export default function InsightsPage() {
         </Card>
 
         {/* Entenda seus exames — reaproveita a leitura IA existente */}
-        <Card>
+        <Card className="overflow-hidden border-soul-copper/25 shadow-elevation">
+          <div
+            className="h-1 w-full bg-gradient-to-r from-soul-copper/80 via-soul-gold to-soul-gold-light"
+            aria-hidden="true"
+          />
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4 text-emerald-600" />
-              Entenda seus exames
+            <CardTitle className="text-base flex items-center gap-2.5">
+              <span className="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-soul-copper-light via-soul-copper to-soul-brown text-cream flex items-center justify-center shadow-sm">
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <span className="font-display text-lg sm:text-xl">Entenda seus exames</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-dashed p-3 bg-muted/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 rounded-xl border border-dashed border-soul-copper/40 bg-gradient-to-br from-soul-copper/5 to-transparent p-3">
               <p className="text-xs text-muted-foreground">
                 Leia seus exames com IA em Exames & Dietas.
               </p>
               <Button
                 size="sm"
                 asChild
-                className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                className={`h-9 px-4 text-xs shrink-0 ${PREMIUM_BUTTON_CLASS}`}
               >
-                <Link to="/exames-dietas">Abrir Exames & Dietas</Link>
+                <Link to="/exames-dietas">
+                  Abrir Exames & Dietas
+                  <ArrowRight className="h-3.5 w-3.5 ml-1.5" aria-hidden="true" />
+                </Link>
               </Button>
             </div>
           </CardContent>
