@@ -156,6 +156,11 @@ export const ProfileOverviewHeader: React.FC<ProfileOverviewHeaderProps> = ({
                   </span>
                 </div>
                 {email && <p className="text-xs text-muted-foreground">{email}</p>}
+                <p className="text-sm text-muted-foreground leading-snug max-w-prose">
+                  Este é o seu perfil de saúde: seus dados pessoais, histórico médico (cirurgias e
+                  alergias), biomarcadores e as metas que orientam seu acompanhamento na Clínica
+                  Soul.
+                </p>
               </div>
             </div>
 
