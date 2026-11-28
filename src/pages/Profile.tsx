@@ -22,6 +22,7 @@ import { profileService } from '@/services/profile'
 import { mealService } from '@/services/mealsAndAi'
 import { loadDashboardPreferences } from '@/services/preferences'
 import { computePreventiveHealthScore, PreventiveHealthScoreData } from '@/lib/preventiveScore'
+import { computeScoreGeral } from '@/components/professional/PatientExtendedTabs'
 
 import { PreventiveScoreCard } from '@/components/profile/PreventiveScoreCard'
 import {
@@ -248,6 +249,11 @@ export const ProfilePage: React.FC = () => {
     return computeEmotionalScore(emotionalLogs)
   }, [emotionalLogs])
 
+  // Score Geral (0–100) — mesma função da aba clínica e da Home (HomeScoresSection)
+  const geralTotal = useMemo(() => {
+    return computeScoreGeral(emotionalLogs, medications, metrics).total
+  }, [emotionalLogs, medications, metrics])
+
   // Busca as métricas corporais mais recentes de peso, gordura % e massa magra
   const latestBodyMetrics = useMemo(() => {
     const weightMetrics = metrics
@@ -409,6 +415,7 @@ export const ProfilePage: React.FC = () => {
           initialData={initialData}
           preventiveScore={scoreResult}
           emotionalScore={emotionalScoreResult}
+          geralTotal={geralTotal}
           avatarInitials={avatarInitials}
           refreshing={refreshing}
           onRefresh={() => loadAllData(true)}
