@@ -237,7 +237,8 @@ interface ScoreParts {
   regularidade: number
 }
 
-function scoreVida360(logs: EmotionalLog[]): number | null {
+/** Média de humor + energia + estresse (invertido) dos últimos 30 check-ins, 0–100. */
+export function scoreVida360(logs: EmotionalLog[]): number | null {
   if (!logs.length) return null
   const recent = logs.slice(0, 30)
   let sum = 0
@@ -251,7 +252,7 @@ function scoreVida360(logs: EmotionalLog[]): number | null {
   return n ? Math.round(sum / n) : null
 }
 
-function scoreAdesao(meds: Medication[], metrics: HealthMetric[]): number | null {
+export function scoreAdesao(meds: Medication[], metrics: HealthMetric[]): number | null {
   const routine = meds.filter((m) => m.routine !== 'once')
   if (!routine.length) return null
   const inicio = daysAgoStr(6)
@@ -274,7 +275,7 @@ function scoreAdesao(meds: Medication[], metrics: HealthMetric[]): number | null
   return Math.min(100, Math.round((taken / Math.max(1, expected)) * 100))
 }
 
-function scoreRegularidade(
+export function scoreRegularidade(
   metrics: HealthMetric[],
   mealsCount: number[],
   logs: EmotionalLog[],
@@ -310,15 +311,12 @@ function ScoreBar({ label, value }: { label: string; value: number | null }) {
   )
 }
 
-export function ScoreGeralTab({
-  metrics,
-  meds,
-  logs,
-}: {
-  metrics: HealthMetric[]
-  meds: Medication[]
-  logs: EmotionalLog[]
-}) {
+export type { ScoreParts }
+export function computeScoreGeral(
+  logs: EmotionalLog[],
+  meds: Medication[],
+  metrics: HealthMetric[],
+): ScoreParts & { total: number | null } {
   const parts: ScoreParts = {
     vida360: scoreVida360(logs),
     adesao: scoreAdesao(meds, metrics),
@@ -329,7 +327,19 @@ export function ScoreGeralTab({
     parts.adesao !== null
       ? 0.5 * (parts.vida360 ?? 0) + 0.3 * parts.adesao + 0.2 * parts.regularidade
       : 0.7 * (parts.vida360 ?? 0) + 0.3 * parts.regularidade
-  const geral = Math.round(total)
+  return { ...parts, total: Math.round(total) }
+}
+
+export function ScoreGeralTab({
+  metrics,
+  meds,
+  logs,
+}: {
+  metrics: HealthMetric[]
+  meds: Medication[]
+  logs: EmotionalLog[]
+}) {
+  const { total: geral, ...parts } = computeScoreGeral(logs, meds, metrics)
 
   const tone = geral >= 75 ? 'text-emerald-600' : geral >= 50 ? 'text-amber-600' : 'text-rose-600'
 

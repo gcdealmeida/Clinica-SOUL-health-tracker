@@ -12,6 +12,7 @@ import { TakeIntakeDialog } from '@/components/TakeIntakeDialog'
 import { AllIntakesDialog } from '@/components/AllIntakesDialog'
 import { loadDashboardPreferences, saveDashboardPreferences } from '@/services/preferences'
 import { HealthMetric, EmotionalLog, Meal, MedicalRecord } from '@/types'
+import { HomeScoresSection } from '@/components/home/HomeScoresSection'
 import { Navbar } from '@/components/Navbar'
 import { UserMenuDropdown } from '@/components/menu/UserMenuDropdown'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -233,6 +234,15 @@ export default function HomePage() {
             </CardContent>
           </Card>
         </section>
+
+        {/* Scores (Preventivo, Emocional, Geral) — somente os três, abaixo da timeline */}
+        <HomeScoresSection
+          metrics={metrics}
+          emotionalLogs={emotionalLogs}
+          meals={meals}
+          medications={plannedMeds}
+          loading={loading}
+        />
 
         {/* Cards de métricas (estilo Guava) */}
         <section className="space-y-2">
