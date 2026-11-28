@@ -30,9 +30,7 @@ import {
   UtensilsCrossed,
   Smile,
   Droplets,
-  Coffee,
   ClipboardList,
-  FileText,
   Pill,
 } from 'lucide-react'
 import {
@@ -181,10 +179,6 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => navigate('/refeicoes')}>
-              <UtensilsCrossed className="h-3.5 w-3.5 mr-1 text-emerald-600" />
-              Refeição
-            </Button>
             <Button
               size="sm"
               onClick={() => navigate('/registrar')}
@@ -202,16 +196,12 @@ export default function HomePage() {
             <h2 className="font-display text-base font-semibold text-foreground">
               Hoje — linha do tempo
             </h2>
+            {/* Atalhos rápidos — no máximo 5; demais categorias ficam na tela Registrar */}
             <div className="flex items-center gap-1.5">
               <QuickBtn
                 icon={Droplets}
                 label="Água"
                 onClick={() => navigate('/registrar?category=agua')}
-              />
-              <QuickBtn
-                icon={Coffee}
-                label="Café"
-                onClick={() => navigate('/registrar?category=cafe')}
               />
               <QuickBtn
                 icon={UtensilsCrossed}
@@ -223,9 +213,8 @@ export default function HomePage() {
                 label="Sintomas"
                 onClick={() => navigate('/registrar?category=sintoma')}
               />
-              <QuickBtn icon={FileText} label="Exames" onClick={() => navigate('/exames-dietas')} />
               <QuickBtn icon={Smile} label="Diário" onClick={() => navigate('/diario-emocional')} />
-              <QuickBtn icon={Plus} label="Add" onClick={() => navigate('/registrar')} />
+              <QuickBtn icon={Plus} label="Registrar" onClick={() => navigate('/registrar')} />
             </div>
           </div>
 
